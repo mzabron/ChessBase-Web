@@ -32,8 +32,11 @@ namespace ChessBase.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("BlackRating")
+                    b.Property<int?>("BlackElo")
                         .HasColumnType("integer");
+
+                    b.Property<string>("BlackTitle")
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("CollectionId")
                         .HasColumnType("uuid");
@@ -42,7 +45,6 @@ namespace ChessBase.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ECO")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Event")
@@ -50,6 +52,9 @@ namespace ChessBase.Infrastructure.Migrations
 
                     b.Property<bool>("IsMaster")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("Opening")
+                        .HasColumnType("text");
 
                     b.Property<string>("Pgn")
                         .IsRequired()
@@ -75,8 +80,11 @@ namespace ChessBase.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("WhiteRating")
+                    b.Property<int?>("WhiteElo")
                         .HasColumnType("integer");
+
+                    b.Property<string>("WhiteTitle")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
