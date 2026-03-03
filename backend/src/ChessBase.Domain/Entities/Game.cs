@@ -21,4 +21,5 @@ public class Game
     public bool IsMaster { get; set; }
     public Guid? CollectionId { get; set; }
     public string? UserId { get; set; }
+    public ICollection<Move> Moves { get; set; } = new List<Move>();
 }
