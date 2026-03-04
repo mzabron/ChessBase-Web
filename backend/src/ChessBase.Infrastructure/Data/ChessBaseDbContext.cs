@@ -16,7 +16,8 @@ public class ChessBaseDbContext : DbContext
     {
         modelBuilder.Entity<Move>(entity =>
         {
-            entity.HasOne(m => m.Game)
+            entity
+                .HasOne(m => m.Game)
                 .WithMany(g => g.Moves)
                 .HasForeignKey(m => m.GameId)
                 .OnDelete(DeleteBehavior.Cascade);
