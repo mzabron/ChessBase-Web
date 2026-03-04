@@ -338,12 +338,20 @@ public class PgnService : IPgnParser
             return false;
         }
 
-        return DateTime.TryParseExact(
+        var isParsed = DateTime.TryParseExact(
             rawDate,
             "yyyy.MM.dd",
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
-            out date);
+            out var parsedDate);
+
+        if (!isParsed)
+        {
+            return false;
+        }
+
+        date = DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc);
+        return true;
     }
 
     private static bool TryGetTrailingResult(string movesText, out string result)
