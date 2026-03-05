@@ -6,6 +6,8 @@ using ChessBase.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers();
+
 builder.Services.AddDbContext<ChessBaseDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")
@@ -17,4 +19,5 @@ builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 builder.Services.AddScoped<IPgnImportService, PgnImportService>();
 
 var app = builder.Build();
+app.MapControllers();
 app.Run();
