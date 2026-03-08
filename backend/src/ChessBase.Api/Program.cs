@@ -53,5 +53,3 @@ app.UseExceptionHandler(exceptionHandlerApp =>
 
 app.MapControllers();
 app.Run();
-
-public partial class Program;
