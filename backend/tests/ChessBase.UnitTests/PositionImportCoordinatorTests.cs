@@ -8,6 +8,8 @@ namespace ChessBase.UnitTests;
 
 public class PositionImportCoordinatorTests
 {
+    private const string InitialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
     [Fact]
     public async Task PopulateAsync_GeneratesPositions_ForEveryPly()
     {
@@ -23,6 +25,8 @@ public class PositionImportCoordinatorTests
 
         var ordered = game.Positions.OrderBy(p => p.PlyCount).ToList();
         Assert.Equal([0, 1, 2, 3, 4], ordered.Select(p => p.PlyCount).ToArray());
+        Assert.Null(ordered[0].LastMove);
+        Assert.Equal(InitialFen, ordered[0].Fen);
         Assert.Equal("e4", ordered[1].LastMove);
         Assert.Equal("e5", ordered[2].LastMove);
         Assert.Equal("Nf3", ordered[3].LastMove);
@@ -46,6 +50,46 @@ public class PositionImportCoordinatorTests
         Assert.Equal(3, ordered.Count);
         Assert.Equal([0, 1, 2], ordered.Select(p => p.PlyCount).ToArray());
         Assert.Equal("e5", ordered[^1].LastMove);
+    }
+
+    [Fact]
+    public async Task PopulateAsync_DoesNotLeakState_BetweenGamesInBatch()
+    {
+        var coordinator = CreateCoordinator();
+        var gameOne = CreateGame([
+            (1, "e4", "e5"),
+            (2, "Nf3", "Nc6")
+        ]);
+        var gameTwo = CreateGame([
+            (1, "e4", "e5"),
+            (2, "Nf3", "Nc6")
+        ]);
+
+        await coordinator.PopulateAsync([gameOne, gameTwo]);
+
+        var one = gameOne.Positions.OrderBy(p => p.PlyCount).Select(p => (p.PlyCount, p.Fen, p.LastMove, p.FenHash)).ToArray();
+        var two = gameTwo.Positions.OrderBy(p => p.PlyCount).Select(p => (p.PlyCount, p.Fen, p.LastMove, p.FenHash)).ToArray();
+
+        Assert.Equal(one, two);
+    }
+
+    [Fact]
+    public async Task PopulateAsync_HandlesPromotionMove_FromSan()
+    {
+        var coordinator = CreateCoordinator();
+        var game = CreateGame([
+            (1, "a4", "h5"),
+            (2, "a5", "h4"),
+            (3, "a6", "h3"),
+            (4, "axb7", "hxg2"),
+            (5, "bxa8=Q", null)
+        ]);
+
+        await coordinator.PopulateAsync([game]);
+
+        var last = game.Positions.OrderBy(p => p.PlyCount).Last();
+        Assert.Equal("bxa8=Q", last.LastMove);
+        Assert.Contains("Q", last.Fen, StringComparison.Ordinal);
     }
 
     private static PositionImportCoordinator CreateCoordinator()

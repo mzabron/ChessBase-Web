@@ -74,4 +74,50 @@ public class PgnImportPersistenceTests(PostgresTestFixture fixture)
         var maxPly = savedGame.Positions.Max(position => position.PlyCount);
         Assert.Equal(4, maxPly);
     }
+
+    [Fact]
+    public async Task ImportAsync_PersistsGame_WhenLastBlackMoveIsMissing()
+    {
+        await fixture.ResetDatabaseAsync();
+
+        await using var dbContext = fixture.CreateDbContext();
+        var parser = new PgnService();
+        var repository = new GameRepository(dbContext);
+        var serializer = new FenBoardStateSerializer();
+        var factory = new BoardStateFactory(serializer);
+        var transition = new BitboardBoardStateTransition();
+        var hasher = new ZobristPositionHasher();
+        var positionCoordinator = new PositionImportCoordinator(factory, serializer, transition, hasher);
+        var unitOfWork = new EfUnitOfWork(dbContext);
+        var importService = new PgnImportService(parser, repository, positionCoordinator, unitOfWork);
+
+        const string pgn = """
+            [Event "Partial Move Import"]
+            [Site "Test"]
+            [Date "2026.03.04"]
+            [Round "1"]
+            [White "Gamma"]
+            [Black "Delta"]
+            [Result "*"]
+
+            1. e4 e5 2. Nf3
+            """;
+
+        var result = await importService.ImportAsync(pgn);
+
+        Assert.Equal(1, result.ParsedCount);
+        Assert.Equal(1, result.ImportedCount);
+
+        var savedGame = await dbContext.Games
+            .Include(game => game.Moves)
+            .Include(game => game.Positions)
+            .SingleAsync();
+
+        var moveTwo = savedGame.Moves.Single(move => move.MoveNumber == 2);
+        Assert.Equal("Nf3", moveTwo.WhiteMove);
+        Assert.Null(moveTwo.BlackMove);
+
+        var maxPly = savedGame.Positions.Max(position => position.PlyCount);
+        Assert.Equal(3, maxPly);
+    }
 }
