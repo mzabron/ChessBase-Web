@@ -18,7 +18,7 @@ public class Game
     public string Black { get; set; } = null!;
     public string Result { get; set; } = null!;
     public string Pgn { get; set; } = null!;
-    public bool IsMaster { get; set; }
+    public bool IsMaster { get; set; } = false;
     public Guid? CollectionId { get; set; }
     public string? UserId { get; set; }
     public ICollection<Move> Moves { get; set; } = new List<Move>();

@@ -40,7 +40,8 @@ public class PgnImportPersistenceTests(PostgresTestFixture fixture)
             1. e4 { [%eval 0.18] [%clk 0:10:00] } 1... c5 { [%eval 0.25] [%clk 0:09:58] } 2. Nf3 d6 1-0
             """;
 
-        var result = await importService.ImportAsync(pgn);
+        using var reader = new StringReader(pgn);
+        var result = await importService.ImportAsync(reader);
 
         Assert.Equal(1, result.ParsedCount);
         Assert.Equal(1, result.ImportedCount);
@@ -103,7 +104,8 @@ public class PgnImportPersistenceTests(PostgresTestFixture fixture)
             1. e4 e5 2. Nf3
             """;
 
-        var result = await importService.ImportAsync(pgn);
+        using var reader = new StringReader(pgn);
+        var result = await importService.ImportAsync(reader);
 
         Assert.Equal(1, result.ParsedCount);
         Assert.Equal(1, result.ImportedCount);

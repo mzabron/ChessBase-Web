@@ -2,6 +2,7 @@ using ChessBase.Application.Abstractions;
 using ChessBase.Application.Abstractions.Repositories;
 using ChessBase.Application.Services;
 using ChessBase.Domain.Entities;
+using System.IO;
 
 namespace ChessBase.UnitTests;
 
@@ -16,12 +17,13 @@ public class PgnImportServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var service = new PgnImportService(parser, repository, positionCoordinator, unitOfWork);
 
-        var result = await service.ImportAsync(string.Empty);
+        using var reader = new StringReader(string.Empty);
+        var result = await service.ImportAsync(reader);
 
         Assert.Equal(0, result.ParsedCount);
         Assert.Equal(0, result.ImportedCount);
         Assert.Equal(0, result.SkippedCount);
-        Assert.Equal(0, parser.CallCount);
+        Assert.Equal(1, parser.CallCount);
         Assert.Equal(0, repository.CallCount);
         Assert.Equal(0, positionCoordinator.CallCount);
         Assert.Equal(0, unitOfWork.CallCount);
@@ -39,7 +41,8 @@ public class PgnImportServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var service = new PgnImportService(parser, repository, positionCoordinator, unitOfWork);
 
-        var result = await service.ImportAsync("[Event \"X\"]\n\n*");
+        using var reader = new StringReader("[Event \"X\"]\n\n*");
+        var result = await service.ImportAsync(reader);
 
         Assert.Equal(0, result.ParsedCount);
         Assert.Equal(0, result.ImportedCount);
@@ -66,7 +69,8 @@ public class PgnImportServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var service = new PgnImportService(parser, repository, positionCoordinator, unitOfWork);
 
-        var result = await service.ImportAsync("pgn-content");
+        using var reader = new StringReader("pgn-content");
+        var result = await service.ImportAsync(reader);
 
         Assert.Equal(3, result.ParsedCount);
         Assert.Equal(2, result.ImportedCount);
@@ -95,11 +99,56 @@ public class PgnImportServiceTests
         using var cts = new CancellationTokenSource();
         var token = cts.Token;
 
-        await service.ImportAsync("pgn-content", token);
+        using var reader = new StringReader("pgn-content");
+        await service.ImportAsync(reader, cancellationToken: token);
 
         Assert.Equal(token, positionCoordinator.LastToken);
         Assert.Equal(token, repository.LastToken);
         Assert.Equal(token, unitOfWork.LastToken);
+    }
+
+    [Fact]
+    public async Task ImportAsync_MarksGamesAsMaster_WhenFlagIsTrue()
+    {
+        var parser = new FakePgnParser
+        {
+            GamesToReturn = [CreateGame("Alpha", "Beta")]
+        };
+        var repository = new FakeGameRepository();
+        var positionCoordinator = new FakePositionImportCoordinator();
+        var unitOfWork = new FakeUnitOfWork();
+        var service = new PgnImportService(parser, repository, positionCoordinator, unitOfWork);
+
+        using var reader = new StringReader("pgn-content");
+        var result = await service.ImportAsync(reader, markAsMaster: true);
+
+        Assert.Equal(1, result.ImportedCount);
+        Assert.All(repository.LastSavedGames, game => Assert.True(game.IsMaster));
+    }
+
+    [Fact]
+    public async Task ImportAsync_FromReader_ImportsInStreamMode_AndMarksMaster()
+    {
+        var parser = new FakePgnParser
+        {
+            StreamGamesToReturn = [
+                CreateGame("Alpha", "Beta"),
+                CreateGame("", "Invalid")
+            ]
+        };
+        var repository = new FakeGameRepository();
+        var positionCoordinator = new FakePositionImportCoordinator();
+        var unitOfWork = new FakeUnitOfWork();
+        var service = new PgnImportService(parser, repository, positionCoordinator, unitOfWork);
+
+        using var reader = new StringReader("stream-content");
+        var result = await service.ImportAsync(reader, markAsMaster: true, batchSize: 10);
+
+        Assert.Equal(2, result.ParsedCount);
+        Assert.Equal(1, result.ImportedCount);
+        Assert.Equal(1, result.SkippedCount);
+        Assert.Single(repository.LastSavedGames);
+        Assert.True(repository.LastSavedGames[0].IsMaster);
     }
 
     private static Game CreateGame(string white, string black)
@@ -126,12 +175,25 @@ public class PgnImportServiceTests
     private sealed class FakePgnParser : IPgnParser
     {
         public IReadOnlyCollection<Game> GamesToReturn { get; set; } = [];
+        public IReadOnlyCollection<Game> StreamGamesToReturn { get; set; } = [];
         public int CallCount { get; private set; }
 
         public IReadOnlyCollection<Game> ParsePgn(string pgn)
         {
             CallCount++;
             return GamesToReturn;
+        }
+
+        public async IAsyncEnumerable<Game> ParsePgnAsync(TextReader reader, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            var streamGames = StreamGamesToReturn.Count > 0 ? StreamGamesToReturn : GamesToReturn;
+            foreach (var game in streamGames)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return game;
+                await Task.Yield();
+            }
         }
     }
 

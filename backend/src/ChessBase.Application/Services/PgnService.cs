@@ -2,6 +2,7 @@ using ChessBase.Application.Abstractions;
 using ChessBase.Domain.Entities;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 
 namespace ChessBase.Application.Services;
 
@@ -42,6 +43,71 @@ public class PgnService : IPgnParser
         }
 
         return games;
+    }
+
+    public async IAsyncEnumerable<Game> ParsePgnAsync(TextReader reader, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        await foreach (var gameBlock in ReadGameBlocksAsync(reader, cancellationToken))
+        {
+            yield return ParseSingleGame(gameBlock);
+        }
+    }
+
+    private static async IAsyncEnumerable<string> ReadGameBlocksAsync(TextReader reader, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var lines = new List<string>(256);
+        var seenMovesSection = false;
+        var blankStreak = 0;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (line is null)
+            {
+                break;
+            }
+
+            var isBlank = string.IsNullOrWhiteSpace(line);
+            var isTagLine = line.StartsWith("[", StringComparison.Ordinal);
+
+            if (!isBlank && isTagLine && seenMovesSection && blankStreak >= 2)
+            {
+                var completed = string.Join("\n", lines).Trim();
+                if (!string.IsNullOrWhiteSpace(completed))
+                {
+                    yield return completed;
+                }
+
+                lines.Clear();
+                seenMovesSection = false;
+                blankStreak = 0;
+            }
+
+            lines.Add(line);
+
+            if (isBlank)
+            {
+                blankStreak++;
+            }
+            else
+            {
+                blankStreak = 0;
+                if (!isTagLine)
+                {
+                    seenMovesSection = true;
+                }
+            }
+        }
+
+        var finalBlock = string.Join("\n", lines).Trim();
+        if (!string.IsNullOrWhiteSpace(finalBlock))
+        {
+            yield return finalBlock;
+        }
     }
 
     private static Game ParseSingleGame(string gameBlock)

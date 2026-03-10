@@ -13,7 +13,6 @@ using ChessBase.Domain.Engine.Factories;
 using ChessBase.Domain.Engine.Serialization;
 using ChessBase.Domain.Engine.Services;
 using System.IO;
-using System.Linq;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration.AddUserSecrets<Program>();
@@ -61,18 +60,7 @@ try
     }
 	using var scope = host.Services.CreateScope();
 	var services = scope.ServiceProvider;
-	var dbContext = services.GetRequiredService<ChessBaseDbContext>();
 	var importService = services.GetRequiredService<IPgnImportService>();
-
-	if (ShouldApplyMigrations(args))
-	{
-		logger.LogInformation("Applying database migrations...");
-		await dbContext.Database.MigrateAsync();
-	}
-	else
-	{
-		logger.LogInformation("Skipping migrations. Pass --migrate to apply migrations.");
-	}
 
 	var pgnPath = ResolvePgnPath(args);
 	if (pgnPath is null)
@@ -82,8 +70,8 @@ try
 	}
 
 	logger.LogInformation("Importing games from {Path}", pgnPath);
-	var pgnContent = await File.ReadAllTextAsync(pgnPath);
-	var result = await importService.ImportAsync(pgnContent);
+	using var reader = new StreamReader(pgnPath);
+	var result = await importService.ImportAsync(reader, markAsMaster: true);
 
 	logger.LogInformation(
 		"Import finished. Parsed: {Parsed}, Imported: {Imported}, Skipped: {Skipped}",
@@ -95,17 +83,6 @@ catch (Exception ex)
 {
 	logger.LogError(ex, "CLI import failed.");
 	Environment.ExitCode = 1;
-}
-
-static bool ShouldApplyMigrations(string[] args)
-{
-	if (args.Any(arg => string.Equals(arg, "--migrate", StringComparison.OrdinalIgnoreCase)))
-	{
-		return true;
-	}
-
-	var env = Environment.GetEnvironmentVariable("CHESSBASE_APPLY_MIGRATIONS");
-	return bool.TryParse(env, out var apply) && apply;
 }
 
 static string? ResolvePgnPath(string[] args)

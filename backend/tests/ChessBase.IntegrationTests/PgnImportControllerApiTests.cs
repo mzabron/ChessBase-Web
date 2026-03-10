@@ -76,7 +76,7 @@ public class PgnImportControllerApiTests
     {
         public PgnImportResult Result { get; set; } = new(ParsedCount: 1, ImportedCount: 1, SkippedCount: 0);
 
-        public Task<PgnImportResult> ImportAsync(string pgn, CancellationToken cancellationToken = default)
+        public Task<PgnImportResult> ImportAsync(TextReader reader, bool markAsMaster = false, int batchSize = 500, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(Result);
         }
@@ -84,7 +84,7 @@ public class PgnImportControllerApiTests
 
     private sealed class ThrowingImportService : IPgnImportService
     {
-        public Task<PgnImportResult> ImportAsync(string pgn, CancellationToken cancellationToken = default)
+        public Task<PgnImportResult> ImportAsync(TextReader reader, bool markAsMaster = false, int batchSize = 500, CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("Simulated failure");
         }

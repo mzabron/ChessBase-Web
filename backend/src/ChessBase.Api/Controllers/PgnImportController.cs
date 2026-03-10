@@ -16,7 +16,8 @@ public class PgnImportController(IPgnImportService pgnImportService) : Controlle
             return BadRequest("PGN content is required.");
         }
 
-        var result = await pgnImportService.ImportAsync(request.Pgn, cancellationToken);
+        using var reader = new StringReader(request.Pgn);
+        var result = await pgnImportService.ImportAsync(reader, cancellationToken: cancellationToken);
         return Ok(result);
     }
 }

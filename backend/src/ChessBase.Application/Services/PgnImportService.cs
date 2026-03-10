@@ -1,6 +1,7 @@
 using ChessBase.Application.Abstractions;
 using ChessBase.Application.Abstractions.Repositories;
 using ChessBase.Application.Contracts;
+using ChessBase.Domain.Entities;
 
 namespace ChessBase.Application.Services;
 
@@ -10,33 +11,55 @@ public class PgnImportService(
 	IPositionImportCoordinator positionImportCoordinator,
 	IUnitOfWork unitOfWork) : IPgnImportService
 {
-	public async Task<PgnImportResult> ImportAsync(string pgn, CancellationToken cancellationToken = default)
+	public async Task<PgnImportResult> ImportAsync(TextReader reader, bool markAsMaster = false, int batchSize = 500, CancellationToken cancellationToken = default)
 	{
-		if (string.IsNullOrWhiteSpace(pgn))
+		ArgumentNullException.ThrowIfNull(reader);
+
+		if (batchSize <= 0)
 		{
-			return new PgnImportResult(ParsedCount: 0, ImportedCount: 0, SkippedCount: 0);
+			throw new ArgumentOutOfRangeException(nameof(batchSize), "Batch size must be greater than zero.");
 		}
 
-		var parsedGames = pgnParser.ParsePgn(pgn);
-		if (parsedGames.Count == 0)
+		var parsedCount = 0;
+		var importedCount = 0;
+		var skippedCount = 0;
+		var batch = new List<Game>(batchSize);
+
+		await foreach (var game in pgnParser.ParsePgnAsync(reader, cancellationToken))
 		{
-			return new PgnImportResult(ParsedCount: 0, ImportedCount: 0, SkippedCount: 0);
+			parsedCount++;
+			if (string.IsNullOrWhiteSpace(game.White) || string.IsNullOrWhiteSpace(game.Black))
+			{
+				skippedCount++;
+				continue;
+			}
+
+			game.IsMaster = markAsMaster;
+			batch.Add(game);
+			importedCount++;
+
+			if (batch.Count >= batchSize)
+			{
+				await PersistBatchAsync(batch, cancellationToken);
+				batch.Clear();
+			}
 		}
 
-		var validGames = parsedGames
-			.Where(game => !string.IsNullOrWhiteSpace(game.White) && !string.IsNullOrWhiteSpace(game.Black))
-			.ToList();
-
-		if (validGames.Count > 0)
+		if (batch.Count > 0)
 		{
-			await positionImportCoordinator.PopulateAsync(validGames, cancellationToken);
-			await gameRepository.AddRangeAsync(validGames, cancellationToken);
-			await unitOfWork.SaveChangesAsync(cancellationToken);
+			await PersistBatchAsync(batch, cancellationToken);
 		}
 
 		return new PgnImportResult(
-			ParsedCount: parsedGames.Count,
-			ImportedCount: validGames.Count,
-			SkippedCount: parsedGames.Count - validGames.Count);
+			ParsedCount: parsedCount,
+			ImportedCount: importedCount,
+			SkippedCount: skippedCount);
+	}
+
+	private async Task PersistBatchAsync(IReadOnlyCollection<Domain.Entities.Game> games, CancellationToken cancellationToken)
+	{
+		await positionImportCoordinator.PopulateAsync(games, cancellationToken);
+		await gameRepository.AddRangeAsync(games, cancellationToken);
+		await unitOfWork.SaveChangesAsync(cancellationToken);
 	}
 }

@@ -4,5 +4,5 @@ namespace ChessBase.Application.Abstractions;
 
 public interface IPgnParser
 {
-    IReadOnlyCollection<Game> ParsePgn(string pgn);
+    IAsyncEnumerable<Game> ParsePgnAsync(TextReader reader, CancellationToken cancellationToken = default);
 }
