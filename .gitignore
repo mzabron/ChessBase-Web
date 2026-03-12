@@ -12,6 +12,8 @@ Thumbs.db
 #######################################
 **/bin/
 **/obj/
+**/bin\\Debug/
+**/obj\\Debug/
 *.user
 *.suo
 *.userosscache
