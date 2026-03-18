@@ -54,6 +54,194 @@ public class GameExplorerRepository(ChessBaseDbContext dbContext) : IGameExplore
         };
     }
 
+    public Task<MoveTreeResponse> GetMoveTreeAsync(
+        MoveTreeRequest request,
+        string ownerUserId,
+        string normalizedFen,
+        long fenHash,
+        CancellationToken cancellationToken = default)
+    {
+        return request.Source switch
+        {
+            MoveTreeSource.UserDatabase => GetUserDatabaseMoveTreeAsync(
+                request,
+                ownerUserId,
+                normalizedFen,
+                fenHash,
+                cancellationToken),
+            MoveTreeSource.StagingSession => GetStagingMoveTreeAsync(
+                request,
+                ownerUserId,
+                normalizedFen,
+                fenHash,
+                cancellationToken),
+            _ => Task.FromResult(new MoveTreeResponse())
+        };
+    }
+
+    private async Task<MoveTreeResponse> GetUserDatabaseMoveTreeAsync(
+        MoveTreeRequest request,
+        string ownerUserId,
+        string normalizedFen,
+        long fenHash,
+        CancellationToken cancellationToken)
+    {
+        if (!request.UserDatabaseId.HasValue || request.UserDatabaseId == Guid.Empty)
+        {
+            return new MoveTreeResponse();
+        }
+
+        var userDatabaseId = request.UserDatabaseId.Value;
+        var hasAccess = await dbContext.UserDatabases
+            .AsNoTracking()
+            .AnyAsync(d => d.Id == userDatabaseId && d.OwnerUserId == ownerUserId, cancellationToken);
+
+        if (!hasAccess)
+        {
+            return new MoveTreeResponse();
+        }
+
+        var parentPositions =
+            from link in dbContext.UserDatabaseGames.AsNoTracking()
+            join parent in dbContext.Positions.AsNoTracking() on link.GameId equals parent.GameId
+            where link.UserDatabaseId == userDatabaseId && parent.FenHash == fenHash && parent.Fen == normalizedFen
+            select new
+            {
+                parent.GameId,
+                parent.PlyCount
+            };
+
+        var totalGamesInPosition = await parentPositions
+            .Select(p => p.GameId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        var aggregates = await (
+            from parent in parentPositions
+            join child in dbContext.Positions.AsNoTracking()
+                on new { parent.GameId, NextPly = parent.PlyCount + 1 }
+                equals new { child.GameId, NextPly = child.PlyCount }
+            join game in dbContext.Games.AsNoTracking() on parent.GameId equals game.Id
+            where child.LastMove != null && child.LastMove != string.Empty
+            select new
+            {
+                parent.GameId,
+                MoveSan = child.LastMove!,
+                game.Result
+            })
+            .Distinct()
+            .GroupBy(x => x.MoveSan)
+            .Select(g => new MoveTreeAggregate
+            {
+                MoveSan = g.Key,
+                Games = g.Count(),
+                WhiteWins = g.Count(x => x.Result == "1-0"),
+                Draws = g.Count(x => x.Result == "1/2-1/2"),
+                BlackWins = g.Count(x => x.Result == "0-1")
+            })
+            .OrderByDescending(x => x.Games)
+            .ThenBy(x => x.MoveSan)
+            .Take(request.MaxMoves)
+            .ToListAsync(cancellationToken);
+
+        return new MoveTreeResponse
+        {
+            TotalGamesInPosition = totalGamesInPosition,
+            Moves = aggregates
+                .Select(ToMoveDto)
+                .ToArray()
+        };
+    }
+
+    private async Task<MoveTreeResponse> GetStagingMoveTreeAsync(
+        MoveTreeRequest request,
+        string ownerUserId,
+        string normalizedFen,
+        long fenHash,
+        CancellationToken cancellationToken)
+    {
+        if (!request.ImportSessionId.HasValue || request.ImportSessionId == Guid.Empty)
+        {
+            return new MoveTreeResponse();
+        }
+
+        var importSessionId = request.ImportSessionId.Value;
+        var hasAccess = await dbContext.StagingImportSessions
+            .AsNoTracking()
+            .AnyAsync(s => s.Id == importSessionId && s.OwnerUserId == ownerUserId, cancellationToken);
+
+        if (!hasAccess)
+        {
+            return new MoveTreeResponse();
+        }
+
+        var parentPositions =
+            from game in dbContext.StagingGames.AsNoTracking()
+            join parent in dbContext.StagingPositions.AsNoTracking() on game.Id equals parent.StagingGameId
+            where game.OwnerUserId == ownerUserId
+                  && game.ImportSessionId == importSessionId
+                  && parent.FenHash == fenHash
+                  && parent.Fen == normalizedFen
+            select new
+            {
+                parent.StagingGameId,
+                parent.PlyCount
+            };
+
+        var totalGamesInPosition = await parentPositions
+            .Select(p => p.StagingGameId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        var aggregates = await (
+            from parent in parentPositions
+            join child in dbContext.StagingPositions.AsNoTracking()
+                on new { StagingGameId = parent.StagingGameId, NextPly = parent.PlyCount + 1 }
+                equals new { child.StagingGameId, NextPly = child.PlyCount }
+            join game in dbContext.StagingGames.AsNoTracking() on parent.StagingGameId equals game.Id
+            where child.LastMove != null && child.LastMove != string.Empty
+            select new
+            {
+                parent.StagingGameId,
+                MoveSan = child.LastMove!,
+                game.Result
+            })
+            .Distinct()
+            .GroupBy(x => x.MoveSan)
+            .Select(g => new MoveTreeAggregate
+            {
+                MoveSan = g.Key,
+                Games = g.Count(),
+                WhiteWins = g.Count(x => x.Result == "1-0"),
+                Draws = g.Count(x => x.Result == "1/2-1/2"),
+                BlackWins = g.Count(x => x.Result == "0-1")
+            })
+            .OrderByDescending(x => x.Games)
+            .ThenBy(x => x.MoveSan)
+            .Take(request.MaxMoves)
+            .ToListAsync(cancellationToken);
+
+        return new MoveTreeResponse
+        {
+            TotalGamesInPosition = totalGamesInPosition,
+            Moves = aggregates
+                .Select(ToMoveDto)
+                .ToArray()
+        };
+    }
+
+    private static MoveTreeMoveDto ToMoveDto(MoveTreeAggregate aggregate)
+    {
+        return new MoveTreeMoveDto
+        {
+            MoveSan = aggregate.MoveSan,
+            Games = aggregate.Games,
+            WhiteWins = aggregate.WhiteWins,
+            Draws = aggregate.Draws,
+            BlackWins = aggregate.BlackWins
+        };
+    }
+
     private static IQueryable<Game> ApplyScalarFilters(IQueryable<Game> query, GameExplorerSearchRequest request)
     {
         if (request.EloEnabled && request.EloFrom.HasValue && request.EloTo.HasValue)
@@ -242,5 +430,14 @@ public class GameExplorerRepository(ChessBaseDbContext dbContext) : IGameExplore
 
             _ => query.OrderByDescending(g => g.Year).ThenBy(g => g.Id)
         };
+    }
+
+    private sealed class MoveTreeAggregate
+    {
+        public string MoveSan { get; set; } = string.Empty;
+        public int Games { get; set; }
+        public int WhiteWins { get; set; }
+        public int Draws { get; set; }
+        public int BlackWins { get; set; }
     }
 }

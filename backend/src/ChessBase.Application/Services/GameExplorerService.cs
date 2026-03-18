@@ -74,6 +74,51 @@ public class GameExplorerService(
             cancellationToken);
     }
 
+    public async Task<MoveTreeResponse> GetMoveTreeAsync(
+        MoveTreeRequest request,
+        string ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(ownerUserId))
+        {
+            throw new ArgumentException("Owner user id is required.", nameof(ownerUserId));
+        }
+
+        var normalizedFen = request.Fen?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedFen))
+        {
+            return new MoveTreeResponse();
+        }
+
+        request.MaxMoves = request.MaxMoves <= 0 ? 20 : Math.Min(request.MaxMoves, 100);
+
+        var state = boardStateSerializer.FromFen(normalizedFen);
+        var fenHash = unchecked((long)positionHasher.Compute(state));
+
+        var response = await gameExplorerRepository.GetMoveTreeAsync(
+            request,
+            ownerUserId,
+            normalizedFen,
+            fenHash,
+            cancellationToken);
+
+        foreach (var move in response.Moves)
+        {
+            if (move.Games <= 0)
+            {
+                continue;
+            }
+
+            move.WhiteWinPct = Math.Round(move.WhiteWins * 100m / move.Games, 2);
+            move.DrawPct = Math.Round(move.Draws * 100m / move.Games, 2);
+            move.BlackWinPct = Math.Round(move.BlackWins * 100m / move.Games, 2);
+        }
+
+        return response;
+    }
+
     private static string? NormalizeOptional(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))

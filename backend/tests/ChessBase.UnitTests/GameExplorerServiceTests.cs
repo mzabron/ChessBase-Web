@@ -96,6 +96,105 @@ public class GameExplorerServiceTests
         Assert.Equal(0, explorerRepository.CallCount);
     }
 
+    [Fact]
+    public async Task GetMoveTreeAsync_ComputesFenHash_AndCalculatesPercentages()
+    {
+        const string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+        var playerRepository = new FakePlayerRepository();
+        var explorerRepository = new FakeGameExplorerRepository
+        {
+            MoveTreeResponse = new MoveTreeResponse
+            {
+                TotalGamesInPosition = 10,
+                Moves =
+                [
+                    new MoveTreeMoveDto
+                    {
+                        MoveSan = "e4",
+                        Games = 5,
+                        WhiteWins = 3,
+                        Draws = 1,
+                        BlackWins = 1
+                    },
+                    new MoveTreeMoveDto
+                    {
+                        MoveSan = "d4",
+                        Games = 2,
+                        WhiteWins = 0,
+                        Draws = 1,
+                        BlackWins = 1
+                    }
+                ]
+            }
+        };
+
+        var serializer = new FakeBoardStateSerializer();
+        var hasher = new FakePositionHasher { HashToReturn = 99UL };
+        var service = new GameExplorerService(explorerRepository, playerRepository, serializer, hasher);
+
+        var result = await service.GetMoveTreeAsync(new MoveTreeRequest
+        {
+            Fen = fen,
+            Source = MoveTreeSource.UserDatabase,
+            UserDatabaseId = Guid.NewGuid(),
+            MaxMoves = 10
+        }, "user-1");
+
+        Assert.Equal(fen, serializer.LastFenInput);
+        Assert.Equal(fen, explorerRepository.LastMoveTreeNormalizedFen);
+        Assert.Equal(unchecked((long)99UL), explorerRepository.LastMoveTreeFenHash);
+        Assert.Equal(60m, result.Moves[0].WhiteWinPct);
+        Assert.Equal(20m, result.Moves[0].DrawPct);
+        Assert.Equal(20m, result.Moves[0].BlackWinPct);
+        Assert.Equal(0m, result.Moves[1].WhiteWinPct);
+        Assert.Equal(50m, result.Moves[1].DrawPct);
+        Assert.Equal(50m, result.Moves[1].BlackWinPct);
+    }
+
+    [Fact]
+    public async Task GetMoveTreeAsync_DoesNotThrow_WhenMoveHasZeroGames()
+    {
+        const string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+        var playerRepository = new FakePlayerRepository();
+        var explorerRepository = new FakeGameExplorerRepository
+        {
+            MoveTreeResponse = new MoveTreeResponse
+            {
+                TotalGamesInPosition = 0,
+                Moves =
+                [
+                    new MoveTreeMoveDto
+                    {
+                        MoveSan = "e4",
+                        Games = 0,
+                        WhiteWins = 0,
+                        Draws = 0,
+                        BlackWins = 0
+                    }
+                ]
+            }
+        };
+
+        var serializer = new FakeBoardStateSerializer();
+        var hasher = new FakePositionHasher();
+        var service = new GameExplorerService(explorerRepository, playerRepository, serializer, hasher);
+
+        var result = await service.GetMoveTreeAsync(new MoveTreeRequest
+        {
+            Fen = fen,
+            Source = MoveTreeSource.UserDatabase,
+            UserDatabaseId = Guid.NewGuid()
+        }, "user-1");
+
+        Assert.Single(result.Moves);
+        Assert.Equal(0, result.Moves[0].Games);
+        Assert.Equal(0m, result.Moves[0].WhiteWinPct);
+        Assert.Equal(0m, result.Moves[0].DrawPct);
+        Assert.Equal(0m, result.Moves[0].BlackWinPct);
+    }
+
     private sealed class FakeGameExplorerRepository : IGameExplorerRepository
     {
         public int CallCount { get; private set; }
@@ -104,6 +203,11 @@ public class GameExplorerServiceTests
         public string? LastNormalizedFen { get; private set; }
         public long? LastFenHash { get; private set; }
         public PagedResult<GameExplorerItemDto> Response { get; set; } = new();
+        public MoveTreeResponse MoveTreeResponse { get; set; } = new();
+        public MoveTreeRequest? LastMoveTreeRequest { get; private set; }
+        public string? LastMoveTreeOwnerUserId { get; private set; }
+        public string? LastMoveTreeNormalizedFen { get; private set; }
+        public long? LastMoveTreeFenHash { get; private set; }
 
         public Task<PagedResult<GameExplorerItemDto>> SearchAsync(
             GameExplorerSearchRequest request,
@@ -119,6 +223,20 @@ public class GameExplorerServiceTests
             LastNormalizedFen = normalizedFen;
             LastFenHash = fenHash;
             return Task.FromResult(Response);
+        }
+
+        public Task<MoveTreeResponse> GetMoveTreeAsync(
+            MoveTreeRequest request,
+            string ownerUserId,
+            string normalizedFen,
+            long fenHash,
+            CancellationToken cancellationToken = default)
+        {
+            LastMoveTreeRequest = request;
+            LastMoveTreeOwnerUserId = ownerUserId;
+            LastMoveTreeNormalizedFen = normalizedFen;
+            LastMoveTreeFenHash = fenHash;
+            return Task.FromResult(MoveTreeResponse);
         }
     }
 

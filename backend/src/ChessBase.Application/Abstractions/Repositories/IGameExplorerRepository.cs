@@ -11,4 +11,11 @@ public interface IGameExplorerRepository
         string? normalizedFen,
         long? fenHash,
         CancellationToken cancellationToken = default);
+
+    Task<MoveTreeResponse> GetMoveTreeAsync(
+        MoveTreeRequest request,
+        string ownerUserId,
+        string normalizedFen,
+        long fenHash,
+        CancellationToken cancellationToken = default);
 }
