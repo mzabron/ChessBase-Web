@@ -45,6 +45,12 @@ public sealed class PostgresTestFixture : IAsyncLifetime
     public async Task ResetDatabaseAsync()
     {
         await using var dbContext = CreateDbContext();
-        await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE \"Moves\", \"Games\" RESTART IDENTITY CASCADE;");
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "TRUNCATE TABLE " +
+            "\"UserDatabaseGames\", \"UserDatabases\", " +
+            "\"Positions\", \"Moves\", \"Games\", \"Players\", " +
+            "\"AspNetUserTokens\", \"AspNetUserRoles\", \"AspNetUserLogins\", \"AspNetUserClaims\", \"AspNetUsers\", " +
+            "\"AspNetRoleClaims\", \"AspNetRoles\" " +
+            "RESTART IDENTITY CASCADE;");
     }
 }
