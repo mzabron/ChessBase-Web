@@ -1,0 +1,10 @@
+using ChessBase.Domain.Entities;
+
+namespace ChessBase.Application.Abstractions.Repositories;
+
+public interface IDraftImportRepository
+{
+    Task<StagingImportSession?> GetImportSessionAsync(Guid importSessionId, string ownerUserId, CancellationToken cancellationToken = default);
+    Task AddImportSessionAsync(StagingImportSession session, CancellationToken cancellationToken = default);
+    Task AddStagingGamesAsync(IReadOnlyCollection<StagingGame> games, CancellationToken cancellationToken = default);
+}

@@ -8,4 +8,15 @@ public class EfUnitOfWork(ChessBaseDbContext dbContext) : IUnitOfWork
     {
         return dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        return new EfUnitOfWorkTransaction(transaction);
+    }
+
+    public void ClearTracker()
+    {
+        dbContext.ChangeTracker.Clear();
+    }
 }

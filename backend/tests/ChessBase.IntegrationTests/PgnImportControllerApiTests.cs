@@ -68,6 +68,10 @@ public class PgnImportControllerApiTests
             {
                 services.RemoveAll<IPgnImportService>();
                 services.AddSingleton(importService);
+                services.RemoveAll<IDraftImportService>();
+                services.RemoveAll<IDraftPromotionService>();
+                services.AddSingleton<IDraftImportService>(new NoopDraftImportService());
+                services.AddSingleton<IDraftPromotionService>(new NoopDraftPromotionService());
             });
         }
     }
@@ -87,6 +91,32 @@ public class PgnImportControllerApiTests
         public Task<PgnImportResult> ImportAsync(TextReader reader, bool markAsMaster = false, int batchSize = 500, CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("Simulated failure");
+        }
+    }
+
+    private sealed class NoopDraftImportService : IDraftImportService
+    {
+        public Task<DraftImportResult> ImportAsync(
+            TextReader reader,
+            string ownerUserId,
+            Guid? importSessionId = null,
+            int batchSize = 500,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new DraftImportResult(Guid.NewGuid(), 0, 0, 0, DateTime.UtcNow.AddDays(7)));
+        }
+    }
+
+    private sealed class NoopDraftPromotionService : IDraftPromotionService
+    {
+        public Task<DraftPromotionResult> PromoteAsync(
+            string ownerUserId,
+            Guid importSessionId,
+            Guid userDatabaseId,
+            DuplicateHandlingMode duplicateHandling,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new DraftPromotionResult(importSessionId, 0, 0, 0, 0));
         }
     }
 }

@@ -208,10 +208,12 @@ public class UserDatabasesController(ChessBaseDbContext dbContext) : ControllerB
             return BadRequest("Provided game ids are invalid.");
         }
 
-        var existingGameIds = await dbContext.Games
+        var existingGames = await dbContext.Games
             .Where(g => distinctGameIds.Contains(g.Id))
-            .Select(g => g.Id)
+            .Select(g => new { g.Id, g.Date, g.Year, g.Event, g.Round, g.Site })
             .ToListAsync(cancellationToken);
+
+        var existingGameIds = existingGames.Select(g => g.Id).ToArray();
 
         var missing = distinctGameIds.Except(existingGameIds).ToArray();
         if (missing.Length > 0)
@@ -224,12 +226,23 @@ public class UserDatabasesController(ChessBaseDbContext dbContext) : ControllerB
             .Select(x => x.GameId)
             .ToListAsync(cancellationToken);
 
+        var existingGameMap = existingGames.ToDictionary(g => g.Id);
+
         var toInsert = distinctGameIds.Except(alreadyLinked)
-            .Select(gameId => new UserDatabaseGame
+            .Select(gameId =>
             {
-                UserDatabaseId = id,
-                GameId = gameId,
-                AddedAtUtc = DateTime.UtcNow
+                var game = existingGameMap[gameId];
+                return new UserDatabaseGame
+                {
+                    UserDatabaseId = id,
+                    GameId = gameId,
+                    AddedAtUtc = DateTime.UtcNow,
+                    Date = game.Date,
+                    Year = game.Year,
+                    Event = game.Event,
+                    Round = game.Round,
+                    Site = game.Site
+                };
             })
             .ToArray();
 

@@ -17,6 +17,10 @@ public class ChessBaseDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Position> Positions { get; set; }
     public DbSet<UserDatabase> UserDatabases { get; set; }
     public DbSet<UserDatabaseGame> UserDatabaseGames { get; set; }
+    public DbSet<StagingImportSession> StagingImportSessions { get; set; }
+    public DbSet<StagingGame> StagingGames { get; set; }
+    public DbSet<StagingMove> StagingMoves { get; set; }
+    public DbSet<StagingPosition> StagingPositions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +43,8 @@ public class ChessBaseDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(g => new { g.Year, g.Id });
             entity.HasIndex(g => g.MoveCount);
+            entity.Property(g => g.GameHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(g => g.GameHash);
 
             entity
                 .HasOne(g => g.WhitePlayer)
@@ -92,6 +98,9 @@ public class ChessBaseDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(x => new { x.UserDatabaseId, x.GameId });
             entity.Property(x => x.AddedAtUtc).IsRequired();
+            entity.Property(x => x.Event).HasMaxLength(300);
+            entity.Property(x => x.Round).HasMaxLength(64);
+            entity.Property(x => x.Site).HasMaxLength(300);
 
             entity
                 .HasOne(x => x.UserDatabase)
@@ -103,6 +112,68 @@ public class ChessBaseDbContext : IdentityDbContext<ApplicationUser>
                 .HasOne(x => x.Game)
                 .WithMany(g => g.UserDatabaseGames)
                 .HasForeignKey(x => x.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StagingImportSession>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OwnerUserId).IsRequired();
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+            entity.Property(x => x.ExpiresAtUtc).IsRequired();
+            entity.HasIndex(x => new { x.OwnerUserId, x.CreatedAtUtc });
+            entity.HasIndex(x => x.ExpiresAtUtc);
+
+            entity
+                .HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.OwnerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StagingGame>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OwnerUserId).IsRequired();
+            entity.Property(x => x.White).IsRequired();
+            entity.Property(x => x.Black).IsRequired();
+            entity.Property(x => x.Result).IsRequired();
+            entity.Property(x => x.Pgn).IsRequired();
+            entity.Property(x => x.GameHash).HasMaxLength(64).IsRequired();
+
+            entity.HasIndex(x => new { x.OwnerUserId, x.ImportSessionId, x.GameHash });
+            entity.HasIndex(x => new { x.OwnerUserId, x.ImportSessionId, x.White });
+            entity.HasIndex(x => new { x.OwnerUserId, x.ImportSessionId, x.Black });
+            entity.HasIndex(x => x.ImportSessionId);
+
+            entity
+                .HasOne(x => x.ImportSession)
+                .WithMany(x => x.Games)
+                .HasForeignKey(x => x.ImportSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StagingMove>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity
+                .HasOne(x => x.Game)
+                .WithMany(x => x.Moves)
+                .HasForeignKey(x => x.StagingGameId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StagingPosition>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.FenHash);
+            entity.HasIndex(x => new { x.StagingGameId, x.PlyCount });
+
+            entity
+                .HasOne(x => x.Game)
+                .WithMany(x => x.Positions)
+                .HasForeignKey(x => x.StagingGameId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

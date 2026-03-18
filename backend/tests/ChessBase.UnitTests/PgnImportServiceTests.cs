@@ -230,6 +230,33 @@ public class PgnImportServiceTests
             LastToken = cancellationToken;
             return Task.FromResult(1);
         }
+
+        public Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IUnitOfWorkTransaction>(new FakeUnitOfWorkTransaction());
+        }
+
+        public void ClearTracker()
+        {
+        }
+    }
+
+    private sealed class FakeUnitOfWorkTransaction : IUnitOfWorkTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class FakePlayerRepository : IPlayerRepository

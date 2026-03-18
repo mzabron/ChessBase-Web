@@ -1,8 +1,10 @@
 namespace ChessBase.Domain.Entities;
 
-public class Game
+public class StagingGame
 {
     public Guid Id { get; set; }
+    public Guid ImportSessionId { get; set; }
+    public string OwnerUserId { get; set; } = null!;
     public Guid? WhitePlayerId { get; set; }
     public Guid? BlackPlayerId { get; set; }
     public DateTime? Date { get; set; }
@@ -23,10 +25,8 @@ public class Game
     public string Pgn { get; set; } = null!;
     public int MoveCount { get; set; }
     public string GameHash { get; set; } = string.Empty;
-    public bool IsMaster { get; set; } = false;
-    public Player? WhitePlayer { get; set; }
-    public Player? BlackPlayer { get; set; }
-    public ICollection<Move> Moves { get; set; } = new List<Move>();
-    public ICollection<Position> Positions { get; set; } = new List<Position>();
-    public ICollection<UserDatabaseGame> UserDatabaseGames { get; set; } = new List<UserDatabaseGame>();
+
+    public StagingImportSession ImportSession { get; set; } = null!;
+    public ICollection<StagingMove> Moves { get; set; } = new List<StagingMove>();
+    public ICollection<StagingPosition> Positions { get; set; } = new List<StagingPosition>();
 }

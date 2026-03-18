@@ -47,6 +47,7 @@ public sealed class PostgresTestFixture : IAsyncLifetime
         await using var dbContext = CreateDbContext();
         await dbContext.Database.ExecuteSqlRawAsync(
             "TRUNCATE TABLE " +
+            "\"StagingPositions\", \"StagingMoves\", \"StagingGames\", \"StagingImportSessions\", " +
             "\"UserDatabaseGames\", \"UserDatabases\", " +
             "\"Positions\", \"Moves\", \"Games\", \"Players\", " +
             "\"AspNetUserTokens\", \"AspNetUserRoles\", \"AspNetUserLogins\", \"AspNetUserClaims\", \"AspNetUsers\", " +

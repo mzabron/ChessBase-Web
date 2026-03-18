@@ -67,12 +67,14 @@ public class PgnImportService(
 			}
 
 			game.MoveCount = game.Moves.Count;
+			game.GameHash = GameHashCalculator.Compute(game);
 		}
 
 		await ResolvePlayersAsync(games, cancellationToken);
 		await positionImportCoordinator.PopulateAsync(games, cancellationToken);
 		await gameRepository.AddRangeAsync(games, cancellationToken);
 		await unitOfWork.SaveChangesAsync(cancellationToken);
+		unitOfWork.ClearTracker();
 	}
 
 	private async Task ResolvePlayersAsync(IReadOnlyCollection<Game> games, CancellationToken cancellationToken)
