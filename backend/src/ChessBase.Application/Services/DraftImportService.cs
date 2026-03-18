@@ -49,7 +49,7 @@ public sealed class DraftImportService(
                 continue;
             }
 
-            var stagingGame = ToStagingGame(parsedGame, session.Id, ownerUserId);
+            var stagingGame = MapToStagingGame(parsedGame, session.Id, ownerUserId);
             batch.Add(stagingGame);
             importedCount++;
 
@@ -114,7 +114,7 @@ public sealed class DraftImportService(
     private async Task PersistBatchAsync(IReadOnlyCollection<StagingGame> stagingGames, CancellationToken cancellationToken)
     {
         var stagingArray = stagingGames as StagingGame[] ?? stagingGames.ToArray();
-        var transientGames = stagingArray.Select(ToTransientGame).ToArray();
+        var transientGames = stagingArray.Select(MapToTransientGame).ToArray();
         await positionImportCoordinator.PopulateAsync(transientGames, cancellationToken);
 
         for (var i = 0; i < stagingArray.Length; i++)
@@ -139,7 +139,7 @@ public sealed class DraftImportService(
         unitOfWork.ClearTracker();
     }
 
-    private static StagingGame ToStagingGame(Game game, Guid importSessionId, string ownerUserId)
+    internal static StagingGame MapToStagingGame(Game game, Guid importSessionId, string ownerUserId)
     {
         if (game.Date.HasValue)
         {
@@ -188,7 +188,7 @@ public sealed class DraftImportService(
         };
     }
 
-    private static Game ToTransientGame(StagingGame stagingGame)
+    internal static Game MapToTransientGame(StagingGame stagingGame)
     {
         return new Game
         {

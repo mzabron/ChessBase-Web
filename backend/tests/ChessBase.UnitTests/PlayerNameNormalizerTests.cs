@@ -42,4 +42,13 @@ public class PlayerNameNormalizerTests
         Assert.Equal("Deep", firstName);
         Assert.Equal("Blue", lastName);
     }
+
+    [Fact]
+    public void Normalize_ProducesSameValue_ForAccentedAndUnaccentedVariants()
+    {
+        var accented = PlayerNameNormalizer.Normalize("José Raúl Capablanca");
+        var unaccented = PlayerNameNormalizer.Normalize("Jose Raul Capablanca");
+
+        Assert.Equal(unaccented, accented);
+    }
 }

@@ -15,14 +15,25 @@ public static class GameHashCalculator
     {
         ArgumentNullException.ThrowIfNull(game);
 
-        var normalizedWhite = PlayerNameNormalizer.Normalize(game.White);
-        var normalizedBlack = PlayerNameNormalizer.Normalize(game.Black);
+        var normalizedWhite = NormalizePlayerNameForHash(game.White);
+        var normalizedBlack = NormalizePlayerNameForHash(game.Black);
         var normalizedMoves = NormalizeMoves(game.Moves);
 
         var payload = $"{normalizedWhite}|{normalizedBlack}|{normalizedMoves}";
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
 
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static string NormalizePlayerNameForHash(string rawName)
+    {
+        var (firstName, lastName) = PlayerNameNormalizer.ParseNameParts(rawName);
+        if (!string.IsNullOrWhiteSpace(firstName) && !string.IsNullOrWhiteSpace(lastName))
+        {
+            return PlayerNameNormalizer.Normalize($"{firstName} {lastName}");
+        }
+
+        return PlayerNameNormalizer.Normalize(rawName);
     }
 
     private static string NormalizeMoves(IEnumerable<Move> moves)
