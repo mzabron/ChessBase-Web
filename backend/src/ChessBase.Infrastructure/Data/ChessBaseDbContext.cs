@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using ChessBase.Domain.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 namespace ChessBase.Infrastructure.Data;
 
-public class ChessBaseDbContext : DbContext
+public class ChessBaseDbContext : IdentityDbContext<ApplicationUser>
 {
     public ChessBaseDbContext(DbContextOptions<ChessBaseDbContext> options)
         : base(options)
@@ -14,8 +15,19 @@ public class ChessBaseDbContext : DbContext
     public DbSet<Player> Players { get; set; }
     public DbSet<Move> Moves { get; set; }
     public DbSet<Position> Positions { get; set; }
+    public DbSet<UserDatabase> UserDatabases { get; set; }
+    public DbSet<UserDatabaseGame> UserDatabaseGames { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<ApplicationUser>(entity =>
+        {
+            entity.HasIndex(u => u.Email).IsUnique();
+            entity.Property(u => u.CreatedAtUtc).IsRequired();
+        });
+
         modelBuilder.Entity<Player>(entity =>
         {
             entity.HasIndex(p => p.NormalizedFullName).IsUnique();
@@ -58,6 +70,40 @@ public class ChessBaseDbContext : DbContext
                 .WithMany(g => g.Positions)
                 .HasForeignKey(p => p.GameId);
 
+        });
+
+        modelBuilder.Entity<UserDatabase>(entity =>
+        {
+            entity.Property(d => d.Name).HasMaxLength(200).IsRequired();
+            entity.Property(d => d.OwnerUserId).IsRequired();
+            entity.Property(d => d.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(d => new { d.OwnerUserId, d.Name }).IsUnique();
+            entity.HasIndex(d => d.IsPublic);
+
+            entity
+                .HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(d => d.OwnerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserDatabaseGame>(entity =>
+        {
+            entity.HasKey(x => new { x.UserDatabaseId, x.GameId });
+            entity.Property(x => x.AddedAtUtc).IsRequired();
+
+            entity
+                .HasOne(x => x.UserDatabase)
+                .WithMany(d => d.UserDatabaseGames)
+                .HasForeignKey(x => x.UserDatabaseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity
+                .HasOne(x => x.Game)
+                .WithMany(g => g.UserDatabaseGames)
+                .HasForeignKey(x => x.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -23,10 +23,9 @@ public class Game
     public string Pgn { get; set; } = null!;
     public int MoveCount { get; set; }
     public bool IsMaster { get; set; } = false;
-    public Guid? CollectionId { get; set; }
-    public string? UserId { get; set; }
     public Player? WhitePlayer { get; set; }
     public Player? BlackPlayer { get; set; }
     public ICollection<Move> Moves { get; set; } = new List<Move>();
     public ICollection<Position> Positions { get; set; } = new List<Position>();
+    public ICollection<UserDatabaseGame> UserDatabaseGames { get; set; } = new List<UserDatabaseGame>();
 }
