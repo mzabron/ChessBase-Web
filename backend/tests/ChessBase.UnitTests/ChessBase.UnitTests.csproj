@@ -19,7 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\ChessBase.Api\ChessBase.Api.csproj" />
     <ProjectReference Include="..\..\src\ChessBase.Application\ChessBase.Application.csproj" />
+    <ProjectReference Include="..\..\src\ChessBase.Infrastructure\ChessBase.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
