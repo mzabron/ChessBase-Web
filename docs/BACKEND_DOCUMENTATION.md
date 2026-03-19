@@ -1,4 +1,4 @@
-# ChessBase Backend Documentation
+# ChessXiv Backend Documentation
 
 ## 1. Scope and Intent
 This document describes the backend implementation in `backend/` as it exists in source code today. It covers:
@@ -24,28 +24,28 @@ This document intentionally focuses on backend source components and excludes ge
 ### 2.1 Solution and Projects
 Primary solution file:
 
-- `backend/ChessBase.sln`
+- `backend/ChessXiv.sln`
 
 Backend projects:
 
-1. `backend/src/ChessBase.Api`
-2. `backend/src/ChessBase.Application`
-3. `backend/src/ChessBase.Domain`
-4. `backend/src/ChessBase.Infrastructure`
-5. `backend/src/ChessBase.Cli`
+1. `backend/src/ChessXiv.Api`
+2. `backend/src/ChessXiv.Application`
+3. `backend/src/ChessXiv.Domain`
+4. `backend/src/ChessXiv.Infrastructure`
+5. `backend/src/ChessXiv.Cli`
 
 Test projects:
 
-1. `backend/tests/ChessBase.UnitTests`
-2. `backend/tests/ChessBase.IntegrationTests`
+1. `backend/tests/ChessXiv.UnitTests`
+2. `backend/tests/ChessXiv.IntegrationTests`
 
 ### 2.2 Layer Responsibilities
 
-- `ChessBase.Api`: ASP.NET Core host, HTTP controllers, auth endpoints, JWT integration, middleware pipeline.
-- `ChessBase.Application`: service layer for PGN import, draft workflows, game explorer orchestration, normalization and hash strategies.
-- `ChessBase.Domain`: entities and chess-engine primitives (board state, SAN transition, FEN serializer, Zobrist hashing).
-- `ChessBase.Infrastructure`: EF Core DbContext, migrations, repositories, unit-of-work implementation.
-- `ChessBase.Cli`: command-line PGN import runner for master import scenarios.
+- `ChessXiv.Api`: ASP.NET Core host, HTTP controllers, auth endpoints, JWT integration, middleware pipeline.
+- `ChessXiv.Application`: service layer for PGN import, draft workflows, game explorer orchestration, normalization and hash strategies.
+- `ChessXiv.Domain`: entities and chess-engine primitives (board state, SAN transition, FEN serializer, Zobrist hashing).
+- `ChessXiv.Infrastructure`: EF Core DbContext, migrations, repositories, unit-of-work implementation.
+- `ChessXiv.Cli`: command-line PGN import runner for master import scenarios.
 
 ### 2.3 Package/Runtime Baseline
 From project files and references:
@@ -61,7 +61,7 @@ From project files and references:
 ---
 
 ## 3. Runtime Bootstrap and Request Pipeline
-Source: `backend/src/ChessBase.Api/Program.cs`
+Source: `backend/src/ChessXiv.Api/Program.cs`
 
 ### 3.1 Startup Sequence
 
@@ -122,7 +122,7 @@ Then standard auth pipeline:
 ## 4. Security and Identity Model
 
 ### 4.1 Identity User
-Source: `backend/src/ChessBase.Infrastructure/Data/ApplicationUser.cs`
+Source: `backend/src/ChessXiv.Infrastructure/Data/ApplicationUser.cs`
 
 `ApplicationUser` extends `IdentityUser` and adds:
 
@@ -141,13 +141,13 @@ Configured in `Program.cs`:
 ### 4.3 JWT Configuration
 Sources:
 
-- `backend/src/ChessBase.Api/Authentication/JwtOptions.cs`
-- `backend/src/ChessBase.Api/Authentication/JwtTokenService.cs`
+- `backend/src/ChessXiv.Api/Authentication/JwtOptions.cs`
+- `backend/src/ChessXiv.Api/Authentication/JwtTokenService.cs`
 
 Defaults:
 
-- Issuer: `ChessBase.Api`
-- Audience: `ChessBase.Web`
+- Issuer: `ChessXiv.Api`
+- Audience: `ChessXiv.Web`
 - Expiration: 60 minutes
 
 Token claims added:
@@ -164,7 +164,7 @@ Validation settings:
 - Clock skew: 1 minute
 
 ### 4.4 Password Reset Behavior
-Source: `backend/src/ChessBase.Api/Controllers/AuthController.cs`
+Source: `backend/src/ChessXiv.Api/Controllers/AuthController.cs`
 
 - Forgot password endpoint generates Identity reset token.
 - Token is Base64Url-encoded before sending.
@@ -176,7 +176,7 @@ Source: `backend/src/ChessBase.Api/Controllers/AuthController.cs`
 ## 5. API Contract and Controller Surface
 
 ### 5.1 `AuthController`
-Source: `backend/src/ChessBase.Api/Controllers/AuthController.cs`
+Source: `backend/src/ChessXiv.Api/Controllers/AuthController.cs`
 Base route: `api/auth`
 
 Endpoints:
@@ -195,7 +195,7 @@ Behavior highlights:
 - Reset-password validates token format and identity errors.
 
 ### 5.2 `PgnImportController`
-Source: `backend/src/ChessBase.Api/Controllers/PgnImportController.cs`
+Source: `backend/src/ChessXiv.Api/Controllers/PgnImportController.cs`
 Base route: `api/pgn`
 
 Endpoints:
@@ -211,7 +211,7 @@ Behavior highlights:
 - Promote requires non-empty `UserDatabaseId`.
 
 ### 5.3 `GameExplorerController`
-Source: `backend/src/ChessBase.Api/Controllers/GameExplorerController.cs`
+Source: `backend/src/ChessXiv.Api/Controllers/GameExplorerController.cs`
 Base route: `api/games/explorer`
 
 Endpoints:
@@ -228,7 +228,7 @@ Behavior highlights:
   - `ImportSessionId` required when `Source=StagingSession`
 
 ### 5.4 `UserDatabasesController`
-Source: `backend/src/ChessBase.Api/Controllers/UserDatabasesController.cs`
+Source: `backend/src/ChessXiv.Api/Controllers/UserDatabasesController.cs`
 Base route: `api/user-databases`
 
 Endpoints:
@@ -252,7 +252,7 @@ Behavior highlights:
 ## 6. Application Layer Deep Dive
 
 ### 6.1 `PgnImportService`
-Source: `backend/src/ChessBase.Application/Services/PgnImportService.cs`
+Source: `backend/src/ChessXiv.Application/Services/PgnImportService.cs`
 
 Purpose:
 
@@ -275,7 +275,7 @@ Key behavior:
   - Clear change tracker after save
 
 ### 6.2 `DraftImportService`
-Source: `backend/src/ChessBase.Application/Services/DraftImportService.cs`
+Source: `backend/src/ChessXiv.Application/Services/DraftImportService.cs`
 
 Purpose:
 
@@ -292,7 +292,7 @@ Key behavior:
 - Saves batch and clears tracker.
 
 ### 6.3 `DraftPromotionService`
-Source: `backend/src/ChessBase.Application/Services/DraftPromotionService.cs`
+Source: `backend/src/ChessXiv.Application/Services/DraftPromotionService.cs`
 
 Purpose:
 
@@ -318,7 +318,7 @@ Key behavior:
 - Rolls back transaction on exception.
 
 ### 6.4 `GameExplorerService`
-Source: `backend/src/ChessBase.Application/Services/GameExplorerService.cs`
+Source: `backend/src/ChessXiv.Application/Services/GameExplorerService.cs`
 
 Search behavior:
 
@@ -339,7 +339,7 @@ Move tree behavior:
 - Computes per-move percentages (`WhiteWinPct`, `DrawPct`, `BlackWinPct`) rounded to 2 decimals.
 
 ### 6.5 `PgnService`
-Source: `backend/src/ChessBase.Application/Services/PgnService.cs`
+Source: `backend/src/ChessXiv.Application/Services/PgnService.cs`
 
 Responsibilities:
 
@@ -358,21 +358,21 @@ Notable parser details:
 
 ### 6.6 Utility Services
 
-`GameHashCalculator` (`backend/src/ChessBase.Application/Services/GameHashCalculator.cs`):
+`GameHashCalculator` (`backend/src/ChessXiv.Application/Services/GameHashCalculator.cs`):
 
 - Builds SHA-256 hash from normalized players + normalized move token stream.
 - Castling normalization `0-0 -> O-O`, `0-0-0 -> O-O-O`.
 - Removes SAN annotations (`+`, `#`, `?`, `!`) for comparison stability.
 - Handles UCI-like token normalization for comparable hash payload.
 
-`PlayerNameNormalizer` (`backend/src/ChessBase.Application/Services/PlayerNameNormalizer.cs`):
+`PlayerNameNormalizer` (`backend/src/ChessXiv.Application/Services/PlayerNameNormalizer.cs`):
 
 - Trims, decomposes unicode, strips diacritics, lowercases.
 - Collapses whitespace.
 - Minimal transliteration map for `ł`, `đ`, `ð`.
 - Parses `Last, First` or `First ... Last` into parts.
 
-`PositionImportCoordinator` (`backend/src/ChessBase.Application/Services/PositionImportCoordinator.cs`):
+`PositionImportCoordinator` (`backend/src/ChessXiv.Application/Services/PositionImportCoordinator.cs`):
 
 - Builds initial board state template.
 - Replays SAN moves using board transition service.
@@ -389,7 +389,7 @@ Notable parser details:
 ## 7. Domain Model and Chess Engine
 
 ### 7.1 Core Entity Catalog
-Sources: `backend/src/ChessBase.Domain/Entities/*.cs`
+Sources: `backend/src/ChessXiv.Domain/Entities/*.cs`
 
 Primary entities:
 
@@ -412,7 +412,7 @@ Modeling characteristics:
 - Staging entities mirror main entities for draft pipeline isolation.
 
 ### 7.2 DbContext Mapping and Index Strategy
-Source: `backend/src/ChessBase.Infrastructure/Data/ChessBaseDbContext.cs`
+Source: `backend/src/ChessXiv.Infrastructure/Data/ChessXivDbContext.cs`
 
 Selected constraints/indexes:
 
@@ -437,11 +437,11 @@ Relationship behavior examples:
 ### 7.3 Engine Subsystem
 Sources:
 
-- `backend/src/ChessBase.Domain/Engine/Models/BoardState.cs`
-- `backend/src/ChessBase.Domain/Engine/Serialization/FenBoardStateSerializer.cs`
-- `backend/src/ChessBase.Domain/Engine/Services/BitboardBoardStateTransition.cs`
-- `backend/src/ChessBase.Domain/Engine/Services/ZobristPositionHasher.cs`
-- `backend/src/ChessBase.Domain/Engine/Hashing/ZobristTables.cs`
+- `backend/src/ChessXiv.Domain/Engine/Models/BoardState.cs`
+- `backend/src/ChessXiv.Domain/Engine/Serialization/FenBoardStateSerializer.cs`
+- `backend/src/ChessXiv.Domain/Engine/Services/BitboardBoardStateTransition.cs`
+- `backend/src/ChessXiv.Domain/Engine/Services/ZobristPositionHasher.cs`
+- `backend/src/ChessXiv.Domain/Engine/Hashing/ZobristTables.cs`
 
 Key mechanics:
 
@@ -535,9 +535,9 @@ Output: `MoveTreeResponse`.
 
 Provided schema graph:
 
-![ChessBase database graph](./database-schema.png)
+![ChessXiv database graph](./database-schema.png)
 
-Migration files under `backend/src/ChessBase.Infrastructure/Migrations` show schema evolution timeline:
+Migration files under `backend/src/ChessXiv.Infrastructure/Migrations` show schema evolution timeline:
 
 1. `20260302214248_InitialCreate`
 2. `20260303125815_AddMovesTableFinal`
@@ -550,16 +550,16 @@ Migration files under `backend/src/ChessBase.Infrastructure/Migrations` show sch
 
 Snapshot file:
 
-- `backend/src/ChessBase.Infrastructure/Migrations/ChessBaseDbContextModelSnapshot.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/ChessXivDbContextModelSnapshot.cs`
 
 Design-time EF factory:
 
-- `backend/src/ChessBase.Infrastructure/Data/ChessBaseDesignTimeDbContextFactory.cs`
+- `backend/src/ChessXiv.Infrastructure/Data/ChessXivDesignTimeDbContextFactory.cs`
 
 Factory behavior:
 
-- Resolves `src/ChessBase.Api` to load appsettings.
-- Reads connection string from `ConnectionStrings:DefaultConnection` or `CHESSBASE_CONNECTION_STRING`.
+- Resolves `src/ChessXiv.Api` to load appsettings.
+- Reads connection string from `ConnectionStrings:DefaultConnection` or `CHESSXIV_CONNECTION_STRING`.
 - Throws explicit error when unresolved.
 
 ---
@@ -568,20 +568,20 @@ Factory behavior:
 
 ### 10.1 Config Files
 
-- `backend/src/ChessBase.Api/appsettings.json`
-- `backend/src/ChessBase.Api/appsettings.Example.json`
+- `backend/src/ChessXiv.Api/appsettings.json`
+- `backend/src/ChessXiv.Api/appsettings.Example.json`
 - `docker-compose.yml` (project root)
 
 ### 10.2 Docker Database Service
 From `docker-compose.yml`:
 
 - Postgres container: `postgres:latest`
-- Container name: `chessbase_db_container`
+- Container name: `chessxiv_db_container`
 - Env-based credentials:
-  - `CHESSBASE_DB_USER`
-  - `CHESSBASE_DB_PASSWORD`
-  - `CHESSBASE_DB_NAME`
-  - `CHESSBASE_DB_PORT` (optional, default 5432)
+  - `CHESSXIV_DB_USER`
+  - `CHESSXIV_DB_PASSWORD`
+  - `CHESSXIV_DB_NAME`
+  - `CHESSXIV_DB_PORT` (optional, default 5432)
 - Named volume: `postgres_data`
 
 ### 10.3 Typical Backend Runbook
@@ -592,12 +592,12 @@ From `docker-compose.yml`:
    - `cd backend`
    - `dotnet build`
 3. Apply migrations:
-   - `dotnet ef database update --project src/ChessBase.Infrastructure --startup-project src/ChessBase.Api`
+   - `dotnet ef database update --project src/ChessXiv.Infrastructure --startup-project src/ChessXiv.Api`
 4. Run API:
-   - `dotnet run --project src/ChessBase.Api/ChessBase.Api.csproj`
+   - `dotnet run --project src/ChessXiv.Api/ChessXiv.Api.csproj`
 
 ### 10.4 CLI Import Runbook
-Source: `backend/src/ChessBase.Cli/Program.cs`
+Source: `backend/src/ChessXiv.Cli/Program.cs`
 
 Behavior:
 
@@ -605,18 +605,18 @@ Behavior:
 - Loads user secrets for connection string.
 - Accepts PGN path from:
   - first CLI arg
-  - `CHESSBASE_PGN_PATH`
+  - `CHESSXIV_PGN_PATH`
   - fallback `backend/tests/TestData/games_sample.pgn`
 - Imports with `markAsMaster: true`.
 
 Run example:
 
-- `dotnet run --project src/ChessBase.Cli/ChessBase.Cli.csproj -- /absolute/path/to/file.pgn`
+- `dotnet run --project src/ChessXiv.Cli/ChessXiv.Cli.csproj -- /absolute/path/to/file.pgn`
 
 ---
 
 ## 11. DTO and Contract Catalog
-Source folder: `backend/src/ChessBase.Application/Contracts`
+Source folder: `backend/src/ChessXiv.Application/Contracts`
 
 Request models:
 
@@ -658,7 +658,7 @@ Enums and option contracts:
 
 ## 12. Testing Strategy and Coverage Map
 
-### 12.1 Unit Tests (`backend/tests/ChessBase.UnitTests`)
+### 12.1 Unit Tests (`backend/tests/ChessXiv.UnitTests`)
 
 Test files:
 
@@ -686,7 +686,7 @@ Coverage intent:
 - Draft import/promote mapping rules and duplicate strategy
 - Explorer search/move-tree orchestration
 
-### 12.2 Integration Tests (`backend/tests/ChessBase.IntegrationTests`)
+### 12.2 Integration Tests (`backend/tests/ChessXiv.IntegrationTests`)
 
 Test files:
 
@@ -727,156 +727,156 @@ The list below captures backend source/config/test files (excluding regular `bin
 
 ### 14.1 API
 
-- `backend/src/ChessBase.Api/Authentication/IJwtTokenService.cs`
-- `backend/src/ChessBase.Api/Authentication/JwtOptions.cs`
-- `backend/src/ChessBase.Api/Authentication/JwtTokenService.cs`
-- `backend/src/ChessBase.Api/Controllers/AuthController.cs`
-- `backend/src/ChessBase.Api/Controllers/GameExplorerController.cs`
-- `backend/src/ChessBase.Api/Controllers/PgnImportController.cs`
-- `backend/src/ChessBase.Api/Controllers/UserDatabasesController.cs`
-- `backend/src/ChessBase.Api/Email/IEmailSender.cs`
-- `backend/src/ChessBase.Api/Email/LoggingEmailSender.cs`
-- `backend/src/ChessBase.Api/Program.cs`
-- `backend/src/ChessBase.Api/Properties/launchSettings.json`
-- `backend/src/ChessBase.Api/appsettings.Example.json`
-- `backend/src/ChessBase.Api/appsettings.json`
-- `backend/src/ChessBase.Api/ChessBase.Api.csproj`
+- `backend/src/ChessXiv.Api/Authentication/IJwtTokenService.cs`
+- `backend/src/ChessXiv.Api/Authentication/JwtOptions.cs`
+- `backend/src/ChessXiv.Api/Authentication/JwtTokenService.cs`
+- `backend/src/ChessXiv.Api/Controllers/AuthController.cs`
+- `backend/src/ChessXiv.Api/Controllers/GameExplorerController.cs`
+- `backend/src/ChessXiv.Api/Controllers/PgnImportController.cs`
+- `backend/src/ChessXiv.Api/Controllers/UserDatabasesController.cs`
+- `backend/src/ChessXiv.Api/Email/IEmailSender.cs`
+- `backend/src/ChessXiv.Api/Email/LoggingEmailSender.cs`
+- `backend/src/ChessXiv.Api/Program.cs`
+- `backend/src/ChessXiv.Api/Properties/launchSettings.json`
+- `backend/src/ChessXiv.Api/appsettings.Example.json`
+- `backend/src/ChessXiv.Api/appsettings.json`
+- `backend/src/ChessXiv.Api/ChessXiv.Api.csproj`
 
 ### 14.2 Application
 
-- `backend/src/ChessBase.Application/Abstractions/IDraftImportService.cs`
-- `backend/src/ChessBase.Application/Abstractions/IDraftPromotionService.cs`
-- `backend/src/ChessBase.Application/Abstractions/IGameExplorerService.cs`
-- `backend/src/ChessBase.Application/Abstractions/IPgnImportService.cs`
-- `backend/src/ChessBase.Application/Abstractions/IPgnParser.cs`
-- `backend/src/ChessBase.Application/Abstractions/IPositionImportCoordinator.cs`
-- `backend/src/ChessBase.Application/Abstractions/IUnitOfWork.cs`
-- `backend/src/ChessBase.Application/Abstractions/IUnitOfWorkTransaction.cs`
-- `backend/src/ChessBase.Application/Abstractions/Repositories/IDraftImportRepository.cs`
-- `backend/src/ChessBase.Application/Abstractions/Repositories/IDraftPromotionRepository.cs`
-- `backend/src/ChessBase.Application/Abstractions/Repositories/IGameExplorerRepository.cs`
-- `backend/src/ChessBase.Application/Abstractions/Repositories/IGameRepository.cs`
-- `backend/src/ChessBase.Application/Abstractions/Repositories/IPlayerRepository.cs`
-- `backend/src/ChessBase.Application/Contracts/AddGamesToDatabaseRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/AuthLoginRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/AuthRegisterRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/AuthTokenResponse.cs`
-- `backend/src/ChessBase.Application/Contracts/CreateUserDatabaseRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/DraftImportRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/DraftImportResult.cs`
-- `backend/src/ChessBase.Application/Contracts/DraftPromotionRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/DraftPromotionResult.cs`
-- `backend/src/ChessBase.Application/Contracts/DuplicateHandlingMode.cs`
-- `backend/src/ChessBase.Application/Contracts/EloFilterMode.cs`
-- `backend/src/ChessBase.Application/Contracts/ForgotPasswordRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/GameExplorerItemDto.cs`
-- `backend/src/ChessBase.Application/Contracts/GameExplorerSearchRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/GameExplorerSortBy.cs`
-- `backend/src/ChessBase.Application/Contracts/MoveTreeMoveDto.cs`
-- `backend/src/ChessBase.Application/Contracts/MoveTreeRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/MoveTreeResponse.cs`
-- `backend/src/ChessBase.Application/Contracts/MoveTreeSource.cs`
-- `backend/src/ChessBase.Application/Contracts/PagedResult.cs`
-- `backend/src/ChessBase.Application/Contracts/PgnImportRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/PgnImportResult.cs`
-- `backend/src/ChessBase.Application/Contracts/PositionSearchMode.cs`
-- `backend/src/ChessBase.Application/Contracts/ResetPasswordRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/SortDirection.cs`
-- `backend/src/ChessBase.Application/Contracts/UpdateUserDatabaseRequest.cs`
-- `backend/src/ChessBase.Application/Contracts/UserDatabaseDto.cs`
-- `backend/src/ChessBase.Application/Services/DraftImportService.cs`
-- `backend/src/ChessBase.Application/Services/DraftPromotionService.cs`
-- `backend/src/ChessBase.Application/Services/GameExplorerService.cs`
-- `backend/src/ChessBase.Application/Services/GameHashCalculator.cs`
-- `backend/src/ChessBase.Application/Services/PgnImportService.cs`
-- `backend/src/ChessBase.Application/Services/PgnService.cs`
-- `backend/src/ChessBase.Application/Services/PlayerNameNormalizer.cs`
-- `backend/src/ChessBase.Application/Services/PositionImportCoordinator.cs`
-- `backend/src/ChessBase.Application/ChessBase.Application.csproj`
+- `backend/src/ChessXiv.Application/Abstractions/IDraftImportService.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IDraftPromotionService.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IGameExplorerService.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IPgnImportService.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IPgnParser.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IPositionImportCoordinator.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IUnitOfWork.cs`
+- `backend/src/ChessXiv.Application/Abstractions/IUnitOfWorkTransaction.cs`
+- `backend/src/ChessXiv.Application/Abstractions/Repositories/IDraftImportRepository.cs`
+- `backend/src/ChessXiv.Application/Abstractions/Repositories/IDraftPromotionRepository.cs`
+- `backend/src/ChessXiv.Application/Abstractions/Repositories/IGameExplorerRepository.cs`
+- `backend/src/ChessXiv.Application/Abstractions/Repositories/IGameRepository.cs`
+- `backend/src/ChessXiv.Application/Abstractions/Repositories/IPlayerRepository.cs`
+- `backend/src/ChessXiv.Application/Contracts/AddGamesToDatabaseRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/AuthLoginRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/AuthRegisterRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/AuthTokenResponse.cs`
+- `backend/src/ChessXiv.Application/Contracts/CreateUserDatabaseRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/DraftImportRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/DraftImportResult.cs`
+- `backend/src/ChessXiv.Application/Contracts/DraftPromotionRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/DraftPromotionResult.cs`
+- `backend/src/ChessXiv.Application/Contracts/DuplicateHandlingMode.cs`
+- `backend/src/ChessXiv.Application/Contracts/EloFilterMode.cs`
+- `backend/src/ChessXiv.Application/Contracts/ForgotPasswordRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/GameExplorerItemDto.cs`
+- `backend/src/ChessXiv.Application/Contracts/GameExplorerSearchRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/GameExplorerSortBy.cs`
+- `backend/src/ChessXiv.Application/Contracts/MoveTreeMoveDto.cs`
+- `backend/src/ChessXiv.Application/Contracts/MoveTreeRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/MoveTreeResponse.cs`
+- `backend/src/ChessXiv.Application/Contracts/MoveTreeSource.cs`
+- `backend/src/ChessXiv.Application/Contracts/PagedResult.cs`
+- `backend/src/ChessXiv.Application/Contracts/PgnImportRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/PgnImportResult.cs`
+- `backend/src/ChessXiv.Application/Contracts/PositionSearchMode.cs`
+- `backend/src/ChessXiv.Application/Contracts/ResetPasswordRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/SortDirection.cs`
+- `backend/src/ChessXiv.Application/Contracts/UpdateUserDatabaseRequest.cs`
+- `backend/src/ChessXiv.Application/Contracts/UserDatabaseDto.cs`
+- `backend/src/ChessXiv.Application/Services/DraftImportService.cs`
+- `backend/src/ChessXiv.Application/Services/DraftPromotionService.cs`
+- `backend/src/ChessXiv.Application/Services/GameExplorerService.cs`
+- `backend/src/ChessXiv.Application/Services/GameHashCalculator.cs`
+- `backend/src/ChessXiv.Application/Services/PgnImportService.cs`
+- `backend/src/ChessXiv.Application/Services/PgnService.cs`
+- `backend/src/ChessXiv.Application/Services/PlayerNameNormalizer.cs`
+- `backend/src/ChessXiv.Application/Services/PositionImportCoordinator.cs`
+- `backend/src/ChessXiv.Application/ChessXiv.Application.csproj`
 
 ### 14.3 Domain
 
-- `backend/src/ChessBase.Domain/Engine/Abstractions/IBoardStateFactory.cs`
-- `backend/src/ChessBase.Domain/Engine/Abstractions/IBoardStateSerializer.cs`
-- `backend/src/ChessBase.Domain/Engine/Abstractions/IBoardStateTransition.cs`
-- `backend/src/ChessBase.Domain/Engine/Abstractions/IChessEngine.cs`
-- `backend/src/ChessBase.Domain/Engine/Abstractions/IMoveGenerator.cs`
-- `backend/src/ChessBase.Domain/Engine/Abstractions/IPositionHasher.cs`
-- `backend/src/ChessBase.Domain/Engine/Factories/BoardStateFactory.cs`
-- `backend/src/ChessBase.Domain/Engine/Hashing/ZobristTables.cs`
-- `backend/src/ChessBase.Domain/Engine/Models/BoardState.cs`
-- `backend/src/ChessBase.Domain/Engine/Models/EngineMove.cs`
-- `backend/src/ChessBase.Domain/Engine/Serialization/FenBoardStateSerializer.cs`
-- `backend/src/ChessBase.Domain/Engine/Services/BitboardBoardStateTransition.cs`
-- `backend/src/ChessBase.Domain/Engine/Services/ZobristPositionHasher.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/Bitboard.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/CastlingRights.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/Color.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/MoveType.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/Piece.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/PieceType.cs`
-- `backend/src/ChessBase.Domain/Engine/Types/Square.cs`
-- `backend/src/ChessBase.Domain/Entities/Game.cs`
-- `backend/src/ChessBase.Domain/Entities/Move.cs`
-- `backend/src/ChessBase.Domain/Entities/Player.cs`
-- `backend/src/ChessBase.Domain/Entities/Position.cs`
-- `backend/src/ChessBase.Domain/Entities/StagingGame.cs`
-- `backend/src/ChessBase.Domain/Entities/StagingImportSession.cs`
-- `backend/src/ChessBase.Domain/Entities/StagingMove.cs`
-- `backend/src/ChessBase.Domain/Entities/StagingPosition.cs`
-- `backend/src/ChessBase.Domain/Entities/UserDatabase.cs`
-- `backend/src/ChessBase.Domain/Entities/UserDatabaseGame.cs`
-- `backend/src/ChessBase.Domain/ChessBase.Domain.csproj`
+- `backend/src/ChessXiv.Domain/Engine/Abstractions/IBoardStateFactory.cs`
+- `backend/src/ChessXiv.Domain/Engine/Abstractions/IBoardStateSerializer.cs`
+- `backend/src/ChessXiv.Domain/Engine/Abstractions/IBoardStateTransition.cs`
+- `backend/src/ChessXiv.Domain/Engine/Abstractions/IChessEngine.cs`
+- `backend/src/ChessXiv.Domain/Engine/Abstractions/IMoveGenerator.cs`
+- `backend/src/ChessXiv.Domain/Engine/Abstractions/IPositionHasher.cs`
+- `backend/src/ChessXiv.Domain/Engine/Factories/BoardStateFactory.cs`
+- `backend/src/ChessXiv.Domain/Engine/Hashing/ZobristTables.cs`
+- `backend/src/ChessXiv.Domain/Engine/Models/BoardState.cs`
+- `backend/src/ChessXiv.Domain/Engine/Models/EngineMove.cs`
+- `backend/src/ChessXiv.Domain/Engine/Serialization/FenBoardStateSerializer.cs`
+- `backend/src/ChessXiv.Domain/Engine/Services/BitboardBoardStateTransition.cs`
+- `backend/src/ChessXiv.Domain/Engine/Services/ZobristPositionHasher.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/Bitboard.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/CastlingRights.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/Color.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/MoveType.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/Piece.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/PieceType.cs`
+- `backend/src/ChessXiv.Domain/Engine/Types/Square.cs`
+- `backend/src/ChessXiv.Domain/Entities/Game.cs`
+- `backend/src/ChessXiv.Domain/Entities/Move.cs`
+- `backend/src/ChessXiv.Domain/Entities/Player.cs`
+- `backend/src/ChessXiv.Domain/Entities/Position.cs`
+- `backend/src/ChessXiv.Domain/Entities/StagingGame.cs`
+- `backend/src/ChessXiv.Domain/Entities/StagingImportSession.cs`
+- `backend/src/ChessXiv.Domain/Entities/StagingMove.cs`
+- `backend/src/ChessXiv.Domain/Entities/StagingPosition.cs`
+- `backend/src/ChessXiv.Domain/Entities/UserDatabase.cs`
+- `backend/src/ChessXiv.Domain/Entities/UserDatabaseGame.cs`
+- `backend/src/ChessXiv.Domain/ChessXiv.Domain.csproj`
 
 ### 14.4 Infrastructure
 
-- `backend/src/ChessBase.Infrastructure/Data/ApplicationUser.cs`
-- `backend/src/ChessBase.Infrastructure/Data/ChessBaseDbContext.cs`
-- `backend/src/ChessBase.Infrastructure/Data/ChessBaseDesignTimeDbContextFactory.cs`
-- `backend/src/ChessBase.Infrastructure/Data/EfUnitOfWork.cs`
-- `backend/src/ChessBase.Infrastructure/Data/EfUnitOfWorkTransaction.cs`
-- `backend/src/ChessBase.Infrastructure/Repositories/DraftImportRepository.cs`
-- `backend/src/ChessBase.Infrastructure/Repositories/DraftPromotionRepository.cs`
-- `backend/src/ChessBase.Infrastructure/Repositories/GameExplorerRepository.cs`
-- `backend/src/ChessBase.Infrastructure/Repositories/GameRepository.cs`
-- `backend/src/ChessBase.Infrastructure/Repositories/PlayerRepository.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260302214248_InitialCreate.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260303125815_AddMovesTableFinal.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260305204807_AddPositionTable.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260310115302_AddIsMasterFlag.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260312101909_AddPlayersYearMoveCountExplorer.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260312102243_AddPlayerTable.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260318120841_AddIdentityAndUserDatabases.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/20260318185037_AddStagingArea.cs`
-- `backend/src/ChessBase.Infrastructure/Migrations/ChessBaseDbContextModelSnapshot.cs`
-- `backend/src/ChessBase.Infrastructure/ChessBase.Infrastructure.csproj`
+- `backend/src/ChessXiv.Infrastructure/Data/ApplicationUser.cs`
+- `backend/src/ChessXiv.Infrastructure/Data/ChessXivDbContext.cs`
+- `backend/src/ChessXiv.Infrastructure/Data/ChessXivDesignTimeDbContextFactory.cs`
+- `backend/src/ChessXiv.Infrastructure/Data/EfUnitOfWork.cs`
+- `backend/src/ChessXiv.Infrastructure/Data/EfUnitOfWorkTransaction.cs`
+- `backend/src/ChessXiv.Infrastructure/Repositories/DraftImportRepository.cs`
+- `backend/src/ChessXiv.Infrastructure/Repositories/DraftPromotionRepository.cs`
+- `backend/src/ChessXiv.Infrastructure/Repositories/GameExplorerRepository.cs`
+- `backend/src/ChessXiv.Infrastructure/Repositories/GameRepository.cs`
+- `backend/src/ChessXiv.Infrastructure/Repositories/PlayerRepository.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260302214248_InitialCreate.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260303125815_AddMovesTableFinal.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260305204807_AddPositionTable.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260310115302_AddIsMasterFlag.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260312101909_AddPlayersYearMoveCountExplorer.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260312102243_AddPlayerTable.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260318120841_AddIdentityAndUserDatabases.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/20260318185037_AddStagingArea.cs`
+- `backend/src/ChessXiv.Infrastructure/Migrations/ChessXivDbContextModelSnapshot.cs`
+- `backend/src/ChessXiv.Infrastructure/ChessXiv.Infrastructure.csproj`
 
 ### 14.5 CLI and Tests
 
-- `backend/src/ChessBase.Cli/Program.cs`
-- `backend/src/ChessBase.Cli/ChessBase.Cli.csproj`
-- `backend/tests/ChessBase.UnitTests/AuthControllerTests.cs`
-- `backend/tests/ChessBase.UnitTests/BitboardBoardStateTransitionTests.cs`
-- `backend/tests/ChessBase.UnitTests/DraftImportServiceMappingTests.cs`
-- `backend/tests/ChessBase.UnitTests/DraftPromotionServiceTests.cs`
-- `backend/tests/ChessBase.UnitTests/FenBoardStateSerializerTests.cs`
-- `backend/tests/ChessBase.UnitTests/GameExplorerServiceTests.cs`
-- `backend/tests/ChessBase.UnitTests/GameHashCalculatorTests.cs`
-- `backend/tests/ChessBase.UnitTests/JwtTokenServiceTests.cs`
-- `backend/tests/ChessBase.UnitTests/PgnImportServiceTests.cs`
-- `backend/tests/ChessBase.UnitTests/PgnService.MoveTests.cs`
-- `backend/tests/ChessBase.UnitTests/PgnService.TagTests.cs`
-- `backend/tests/ChessBase.UnitTests/PgnServiceTestData.cs`
-- `backend/tests/ChessBase.UnitTests/PlayerNameNormalizerTests.cs`
-- `backend/tests/ChessBase.UnitTests/PositionImportCoordinatorTests.cs`
-- `backend/tests/ChessBase.UnitTests/ChessBase.UnitTests.csproj`
-- `backend/tests/ChessBase.IntegrationTests/PgnImportControllerApiTests.cs`
-- `backend/tests/ChessBase.IntegrationTests/PgnImportPersistenceTests.cs`
-- `backend/tests/ChessBase.IntegrationTests/DraftPromotionIntegrationTests.cs`
-- `backend/tests/ChessBase.IntegrationTests/UserDatabaseIntegrationTests.cs`
-- `backend/tests/ChessBase.IntegrationTests/Infrastructure/PostgresCollection.cs`
-- `backend/tests/ChessBase.IntegrationTests/Infrastructure/PostgresTestFixture.cs`
-- `backend/tests/ChessBase.IntegrationTests/ChessBase.IntegrationTests.csproj`
+- `backend/src/ChessXiv.Cli/Program.cs`
+- `backend/src/ChessXiv.Cli/ChessXiv.Cli.csproj`
+- `backend/tests/ChessXiv.UnitTests/AuthControllerTests.cs`
+- `backend/tests/ChessXiv.UnitTests/BitboardBoardStateTransitionTests.cs`
+- `backend/tests/ChessXiv.UnitTests/DraftImportServiceMappingTests.cs`
+- `backend/tests/ChessXiv.UnitTests/DraftPromotionServiceTests.cs`
+- `backend/tests/ChessXiv.UnitTests/FenBoardStateSerializerTests.cs`
+- `backend/tests/ChessXiv.UnitTests/GameExplorerServiceTests.cs`
+- `backend/tests/ChessXiv.UnitTests/GameHashCalculatorTests.cs`
+- `backend/tests/ChessXiv.UnitTests/JwtTokenServiceTests.cs`
+- `backend/tests/ChessXiv.UnitTests/PgnImportServiceTests.cs`
+- `backend/tests/ChessXiv.UnitTests/PgnService.MoveTests.cs`
+- `backend/tests/ChessXiv.UnitTests/PgnService.TagTests.cs`
+- `backend/tests/ChessXiv.UnitTests/PgnServiceTestData.cs`
+- `backend/tests/ChessXiv.UnitTests/PlayerNameNormalizerTests.cs`
+- `backend/tests/ChessXiv.UnitTests/PositionImportCoordinatorTests.cs`
+- `backend/tests/ChessXiv.UnitTests/ChessXiv.UnitTests.csproj`
+- `backend/tests/ChessXiv.IntegrationTests/PgnImportControllerApiTests.cs`
+- `backend/tests/ChessXiv.IntegrationTests/PgnImportPersistenceTests.cs`
+- `backend/tests/ChessXiv.IntegrationTests/DraftPromotionIntegrationTests.cs`
+- `backend/tests/ChessXiv.IntegrationTests/UserDatabaseIntegrationTests.cs`
+- `backend/tests/ChessXiv.IntegrationTests/Infrastructure/PostgresCollection.cs`
+- `backend/tests/ChessXiv.IntegrationTests/Infrastructure/PostgresTestFixture.cs`
+- `backend/tests/ChessXiv.IntegrationTests/ChessXiv.IntegrationTests.csproj`
 
 ---
 

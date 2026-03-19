@@ -1,4 +1,4 @@
-# ChessBase-Web
+# ChessXiv
 
 ![Status: Incubating](https://img.shields.io/badge/status-active_development-orange)
 
@@ -8,7 +8,7 @@ This project will include a web-based chess database explorer. I decided to buil
 To avoid passing connection strings in your terminal, initialize User Secrets. This stores your password safely on your machine (outside of Git).
 
 ```
-dotnet user-secrets init --project src/ChessBase.Cli
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=chessbase_db;Username=chessbase_user;Password=YOUR_PASSWORD" --project src/ChessBase.Cli
+dotnet user-secrets init --project src/ChessXiv.Cli
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=chessxiv_db;Username=chessxiv_user;Password=YOUR_PASSWORD" --project src/ChessXiv.Cli
 
 ```

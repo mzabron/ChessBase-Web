@@ -1,14 +1,14 @@
 services:
   db:
     image: postgres:latest
-    container_name: chessbase_db_container
+    container_name: chessxiv_db_container
     restart: always
     environment:
-      POSTGRES_USER: ${CHESSBASE_DB_USER}
-      POSTGRES_PASSWORD: ${CHESSBASE_DB_PASSWORD}
-      POSTGRES_DB: ${CHESSBASE_DB_NAME}
+      POSTGRES_USER: ${CHESSXIV_DB_USER}
+      POSTGRES_PASSWORD: ${CHESSXIV_DB_PASSWORD}
+      POSTGRES_DB: ${CHESSXIV_DB_NAME}
     ports:
-      - "${CHESSBASE_DB_PORT:-5432}:5432"
+      - "${CHESSXIV_DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
 

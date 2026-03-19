@@ -1,6 +1,0 @@
-@ChessBase.Api_HostAddress = http://localhost:5027
-
-GET {{ChessBase.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
