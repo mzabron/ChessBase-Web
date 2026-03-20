@@ -27,8 +27,8 @@
   --line: #3f3f46;
   --accent: #3b82f6; 
   --accent-strong: #2563eb;
-  --square-light: #525252;
-  --square-dark: #262626;
+  --square-light: #8ca2ad;
+  --square-dark: #607382;
 
   background:
     radial-gradient(circle at 10% -10%, #2a2a2a 0%, transparent 45%),
@@ -181,4 +181,8 @@
 
 :host-context(body.dark-theme) .panel {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
+}
+
+:host-context(body.dark-theme) .resize-handle {
+  background: linear-gradient(180deg, #4b5563 0%, #374151 100%);
 }

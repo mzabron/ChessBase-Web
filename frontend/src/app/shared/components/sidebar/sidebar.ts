@@ -10,6 +10,7 @@ import { Component, EventEmitter, Output } from '@angular/core';
 export class Sidebar {
   @Output() loginClick = new EventEmitter<void>();
   @Output() toggleLayout = new EventEmitter<void>();
+  @Output() aboutClick = new EventEmitter<void>();
 
   onLoginClick() {
     this.loginClick.emit();
@@ -17,6 +18,10 @@ export class Sidebar {
 
   onToggleLayout() {
     this.toggleLayout.emit();
+  }
+
+  onAboutClick() {
+    this.aboutClick.emit();
   }
 
   toggleDarkMode() {

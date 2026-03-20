@@ -21,6 +21,17 @@
           </div>
         }
       }
+
+      <!-- Absolute Pieces Layer -->
+      <div class="pieces-layer">
+        @for (piece of pieces; track piece.id) {
+          <img class="piece" 
+               draggable="false"
+               [src]="getPieceUrl(piece.type)" 
+               [style.transform]="getPieceTransform(piece)" 
+               [alt]="piece.type">
+        }
+      </div>
     </div>
   </div>
 

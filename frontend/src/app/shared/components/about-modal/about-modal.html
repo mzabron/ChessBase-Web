@@ -1,0 +1,22 @@
+<div class="modal-overlay" (click)="onClose()">
+  <div class="modal-container" (click)="$event.stopPropagation()">
+    <button class="close-btn" (click)="onClose()" title="Close">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+    
+    <div class="modal-header">
+      <h2>About ChessXiv</h2>
+      <p>Open Source Attributions</p>
+    </div>
+
+    <div class="about-content">
+      <div class="info-block">
+        <h3>Chess Pieces Artwork</h3>
+        <p>The graphical chess pieces used in this application are derived from the "Cburnett" set, originally designed by <strong>Colin M.L. Burnett</strong>.</p>
+        <p>They are openly licensed and distributed under the <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank">CC BY-SA 4.0</a> license.</p>
+      </div>
+
+      <button type="button" class="btn-primary" style="width: 100%" (click)="onClose()">Close</button>
+    </div>
+  </div>
+</div>
