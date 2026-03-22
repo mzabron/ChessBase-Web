@@ -8,7 +8,9 @@ namespace ChessXiv.Api.Controllers;
 
 [ApiController]
 [Route("api/games/explorer")]
-public class GameExplorerController(IGameExplorerService gameExplorerService) : ControllerBase
+public class GameExplorerController(
+    IGameExplorerService gameExplorerService,
+    IPositionPlayService positionPlayService) : ControllerBase
 {
     [HttpPost("search")]
     public async Task<IActionResult> Search([FromBody] GameExplorerSearchRequest request, CancellationToken cancellationToken)
@@ -19,6 +21,18 @@ public class GameExplorerController(IGameExplorerService gameExplorerService) : 
         }
 
         var result = await gameExplorerService.SearchAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPost("position/move")]
+    public IActionResult ApplyPositionMove([FromBody] PositionMoveRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest("Request body is required.");
+        }
+
+        var result = positionPlayService.TryApplyMove(request);
         return Ok(result);
     }
 

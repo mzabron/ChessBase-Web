@@ -7,11 +7,16 @@
     <span class="player-clock">00:08:42</span>
   </div>
 
-  <div class="board" role="img" aria-label="Chessboard placeholder">
-    <div class="board-grid">
-      @for (rank of ranks; track rank) {
-        @for (file of files; track file) {
-          <div class="square" [class.light]="(rank + $index) % 2 === 0" [class.dark]="(rank + $index) % 2 !== 0">
+  <div class="board" role="img" aria-label="Interactive chessboard">
+    <div class="board-grid" #boardGrid>
+      @for (rank of ranks; track rank; let rankIndex = $index) {
+        @for (file of files; track file; let fileIndex = $index) {
+          <div
+            class="square"
+            [class.light]="(rankIndex + fileIndex) % 2 === 0"
+            [class.dark]="(rankIndex + fileIndex) % 2 !== 0"
+            [class.selected]="isSelectedDisplaySquare(fileIndex, rankIndex)"
+            (click)="onSquareClick(fileIndex, rankIndex)">
             @if (rank === 1) {
               <span class="file-label">{{ file }}</span>
             }
@@ -25,15 +30,21 @@
       <!-- Absolute Pieces Layer -->
       <div class="pieces-layer">
         @for (piece of pieces; track piece.id) {
-          <img class="piece" 
-               draggable="false"
-               [src]="getPieceUrl(piece.type)" 
-               [style.transform]="getPieceTransform(piece)" 
-               [alt]="piece.type">
+          <img
+            class="piece"
+            [class.dragging]="isPieceDragging(piece)"
+            [src]="getPieceUrl(piece.type)"
+            [style.transform]="getPieceTransform(piece)"
+            [alt]="piece.type"
+            (pointerdown)="onPiecePointerDown(piece, $event)">
         }
       </div>
     </div>
   </div>
+
+  @if (statusMessage) {
+    <p class="move-status" aria-live="polite">{{ statusMessage }}</p>
+  }
 
   <div class="player-strip bottom" aria-label="White player details">
     <div class="player-main">

@@ -20,6 +20,15 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy.AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowAnyOrigin();
+    });
+});
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
@@ -81,6 +90,7 @@ builder.Services.AddScoped<IPgnImportService, PgnImportService>();
 builder.Services.AddScoped<IDraftImportService, DraftImportService>();
 builder.Services.AddScoped<IDraftPromotionService, DraftPromotionService>();
 builder.Services.AddScoped<IGameExplorerService, GameExplorerService>();
+builder.Services.AddScoped<IPositionPlayService, PositionPlayService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
 
@@ -115,6 +125,7 @@ app.UseExceptionHandler(exceptionHandlerApp =>
 });
 
 app.UseAuthentication();
+app.UseCors("Frontend");
 app.UseAuthorization();
 
 app.MapControllers();

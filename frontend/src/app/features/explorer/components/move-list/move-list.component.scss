@@ -18,6 +18,13 @@
   gap: 0.24rem;
 }
 
+.empty-note {
+  margin: 0;
+  padding: 0.8rem 0.7rem;
+  color: var(--muted);
+  font: 600 0.75rem/1.3 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
 .move-row {
   display: grid;
   grid-template-columns: 1.35rem 1fr 1fr;

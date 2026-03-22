@@ -5,12 +5,16 @@
 
     <!-- Default Mode Board Row -->
     <div class="board-moves-row" *ngIf="!isFocusMode">
-      <app-chessboard />
-      <app-move-list />
+      <app-chessboard (moveApplied)="onMoveApplied($event)" (historyCleared)="clearMoveHistory()" />
+      <app-move-list [moveRows]="moveRows" />
     </div>
 
     <!-- Focus Mode Board -->
-    <app-chessboard *ngIf="isFocusMode" class="full-size-board" />
+    <app-chessboard
+      *ngIf="isFocusMode"
+      class="full-size-board"
+      (moveApplied)="onMoveApplied($event)"
+      (historyCleared)="clearMoveHistory()" />
 
     <!-- Default Mode Tree -->
     <app-games-tree *ngIf="!isFocusMode" />
@@ -42,7 +46,7 @@
           <app-databases-panel />
         </div>
         <app-games-tree *ngIf="focusRightTab === 'tree'" class="full-height-child" />
-        <app-move-list *ngIf="focusRightTab === 'moves'" class="full-height-child" />
+        <app-move-list *ngIf="focusRightTab === 'moves'" class="full-height-child" [moveRows]="moveRows" />
 
         <div *ngIf="focusRightTab === 'games'" class="full-height-child" style="display: flex; flex-direction: column;">
           <header style="padding: 1rem 1rem 0.75rem;">

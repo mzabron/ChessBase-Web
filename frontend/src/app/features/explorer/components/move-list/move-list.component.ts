@@ -1,4 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
+
+export interface MoveRow {
+  number: number;
+  white: string;
+  black: string;
+}
 
 @Component({
   selector: 'app-move-list',
@@ -7,12 +13,5 @@ import { Component } from '@angular/core';
   styleUrl: './move-list.component.scss'
 })
 export class MoveListComponent {
-  protected readonly moveRows = [
-    { number: 1, white: 'e4', black: 'c5' },
-    { number: 2, white: 'Nf3', black: 'd6' },
-    { number: 3, white: 'd4', black: 'cxd4' },
-    { number: 4, white: 'Nxd4', black: 'Nf6' },
-    { number: 5, white: 'Nc3', black: 'a6' },
-    { number: 6, white: 'Bg5', black: 'e6' }
-  ];
+  @Input() moveRows: MoveRow[] = [];
 }

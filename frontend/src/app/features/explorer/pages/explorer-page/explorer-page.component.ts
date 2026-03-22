@@ -8,6 +8,7 @@ import { EmptyGamesStateComponent } from '../../components/empty-games-state/emp
 import { FiltersPanelComponent } from '../../components/filters-panel/filters-panel.component';
 import { DatabasesPanelComponent } from '../../components/databases-panel/databases-panel.component';
 import { GamesTableComponent } from '../../components/games-table/games-table.component';
+import { MoveRow } from '../../components/move-list/move-list.component';
 
 @Component({
   selector: 'app-explorer-page',
@@ -23,6 +24,8 @@ export class ExplorerPageComponent {
   private readonly layoutRoot!: ElementRef<HTMLElement>;
 
   protected gamesLoaded = false;
+  protected moveRows: MoveRow[] = [];
+  protected plyCount = 0;
   protected mockGames: any[] = [
     {
       year: 2023,
@@ -115,5 +118,48 @@ export class ExplorerPageComponent {
   protected searchCommunityDatabase(): void {
     // Placeholder action for searching a remote community database.
     console.log('Search database (community database)');
+  }
+
+  protected onMoveApplied(san: string): void {
+    const whiteToMove = this.plyCount % 2 === 0;
+
+    if (whiteToMove) {
+      this.moveRows = [
+        ...this.moveRows,
+        {
+          number: this.moveRows.length + 1,
+          white: san,
+          black: ''
+        }
+      ];
+      this.plyCount++;
+      return;
+    }
+
+    const lastRow = this.moveRows.at(-1);
+    if (!lastRow) {
+      this.moveRows = [
+        {
+          number: 1,
+          white: san,
+          black: ''
+        }
+      ];
+      return;
+    }
+
+    this.moveRows = [
+      ...this.moveRows.slice(0, -1),
+      {
+        ...lastRow,
+        black: san
+      }
+    ];
+    this.plyCount++;
+  }
+
+  protected clearMoveHistory(): void {
+    this.moveRows = [];
+    this.plyCount = 0;
   }
 }
