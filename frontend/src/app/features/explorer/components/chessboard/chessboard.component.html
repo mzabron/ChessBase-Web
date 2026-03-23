@@ -57,6 +57,23 @@
         }
       </div>
     </div>
+
+    @if (pendingPromotionMove) {
+      <div class="promotion-picker" role="dialog" aria-label="Choose promotion piece" aria-modal="true">
+        <div class="promotion-options" role="group" aria-label="Promotion pieces">
+          @for (choice of promotionChoices; track choice.code) {
+            <button
+              type="button"
+              class="promotion-option"
+              [disabled]="isSubmittingMove"
+              [attr.aria-label]="choice.label"
+              (click)="choosePromotionPiece(choice.code)">
+              <img [src]="getPieceUrl(getPromotionPieceType(choice.code))" [alt]="choice.label">
+            </button>
+          }
+        </div>
+      </div>
+    }
   </div>
 
   @if (statusMessage) {

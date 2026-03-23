@@ -20,6 +20,12 @@ interface SetupSnapshot {
   pieces: ChessPiece[];
 }
 
+interface PendingPromotionMove {
+  from: string;
+  to: string;
+  side: 'w' | 'b';
+}
+
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 const PIECE_URLS: Record<string, string> = {
@@ -53,6 +59,12 @@ export class ChessboardComponent implements OnChanges {
   protected readonly files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
   protected readonly whiteSetupPieces = ['wk', 'wq', 'wr', 'wb', 'wn', 'wp'];
   protected readonly blackSetupPieces = ['bk', 'bq', 'br', 'bb', 'bn', 'bp'];
+  protected readonly promotionChoices: Array<{ code: 'q' | 'r' | 'b' | 'n'; label: string }> = [
+    { code: 'q', label: 'Queen' },
+    { code: 'r', label: 'Rook' },
+    { code: 'b', label: 'Bishop' },
+    { code: 'n', label: 'Knight' }
+  ];
 
   @Input() navigationRequest: { ply: number; version: number } | null = null;
 
@@ -64,6 +76,7 @@ export class ChessboardComponent implements OnChanges {
   protected statusMessage: string | null = null;
   protected isSubmittingMove = false;
   protected isSetupMode = false;
+  protected pendingPromotionMove: PendingPromotionMove | null = null;
   protected setupTool: 'hand' | 'delete' | 'place' = 'hand';
   protected setupSelectedPieceType: string | null = null;
   protected setupCastling = {
@@ -143,6 +156,10 @@ export class ChessboardComponent implements OnChanges {
 
   protected onPiecePointerDown(piece: ChessPiece, event: PointerEvent): void {
     event.stopPropagation();
+
+    if (this.pendingPromotionMove) {
+      return;
+    }
 
     if (this.isSetupMode) {
       const setupSource = this.coordsToSquare(piece.x, piece.y);
@@ -229,7 +246,7 @@ export class ChessboardComponent implements OnChanges {
     }
 
     this.selectedSquare = null;
-    void this.tryApplyMove(drag.sourceSquare, targetSquare);
+    this.tryStartMove(drag.sourceSquare, targetSquare);
   }
 
   @HostListener('window:pointercancel')
@@ -254,7 +271,7 @@ export class ChessboardComponent implements OnChanges {
   }
 
   protected goPreviousMove(): void {
-    if (this.isSetupMode) {
+    if (this.isSetupMode || this.pendingPromotionMove) {
       return;
     }
 
@@ -262,7 +279,7 @@ export class ChessboardComponent implements OnChanges {
   }
 
   protected goNextMove(): void {
-    if (this.isSetupMode) {
+    if (this.isSetupMode || this.pendingPromotionMove) {
       return;
     }
 
@@ -270,7 +287,7 @@ export class ChessboardComponent implements OnChanges {
   }
 
   protected goToGameStart(): void {
-    if (this.isSetupMode) {
+    if (this.isSetupMode || this.pendingPromotionMove) {
       return;
     }
 
@@ -278,7 +295,7 @@ export class ChessboardComponent implements OnChanges {
   }
 
   protected goToGameEnd(): void {
-    if (this.isSetupMode) {
+    if (this.isSetupMode || this.pendingPromotionMove) {
       return;
     }
 
@@ -286,10 +303,13 @@ export class ChessboardComponent implements OnChanges {
   }
 
   protected setPosition(): void {
+    this.pendingPromotionMove = null;
     this.startSetupMode();
   }
 
   protected clearPosition(): void {
+    this.pendingPromotionMove = null;
+
     if (this.isSetupMode) {
       this.pieces = [];
       this.normalizeSetupMetadata();
@@ -315,6 +335,7 @@ export class ChessboardComponent implements OnChanges {
 
     this.isSetupMode = true;
     this.selectedSquare = null;
+    this.pendingPromotionMove = null;
     this.statusMessage = null;
     this.setupTool = 'hand';
     this.setupSelectedPieceType = null;
@@ -335,6 +356,7 @@ export class ChessboardComponent implements OnChanges {
     this.pieces = this.setupSnapshot.pieces.map(piece => ({ ...piece }));
 
     this.exitSetupMode();
+    this.pendingPromotionMove = null;
     this.emitNavigationState();
   }
 
@@ -352,9 +374,25 @@ export class ChessboardComponent implements OnChanges {
     this.pieces = this.parseFenToPieces(this.currentFen);
 
     this.exitSetupMode();
+    this.pendingPromotionMove = null;
     this.statusMessage = null;
     this.emitMoveRows();
     this.emitNavigationState();
+  }
+
+  protected choosePromotionPiece(code: 'q' | 'r' | 'b' | 'n'): void {
+    if (!this.pendingPromotionMove || this.isSubmittingMove) {
+      return;
+    }
+
+    const pendingMove = this.pendingPromotionMove;
+    this.pendingPromotionMove = null;
+    void this.tryApplyMove(pendingMove.from, pendingMove.to, code);
+  }
+
+  protected getPromotionPieceType(code: 'q' | 'r' | 'b' | 'n'): string {
+    const side = this.pendingPromotionMove?.side ?? 'w';
+    return `${side}${code}`;
   }
 
   protected selectSetupPiece(type: string): void {
@@ -454,7 +492,7 @@ export class ChessboardComponent implements OnChanges {
   }
 
   private handleSquareInteraction(square: string): void {
-    if (this.isSubmittingMove) {
+    if (this.isSubmittingMove || this.pendingPromotionMove) {
       return;
     }
 
@@ -475,10 +513,20 @@ export class ChessboardComponent implements OnChanges {
 
     const from = this.selectedSquare;
     this.selectedSquare = null;
-    void this.tryApplyMove(from, square);
+    this.tryStartMove(from, square);
   }
 
-  private async tryApplyMove(from: string, to: string): Promise<void> {
+  private tryStartMove(from: string, to: string): void {
+    const promotionSide = this.getPromotionSide(from, to);
+    if (promotionSide) {
+      this.pendingPromotionMove = { from, to, side: promotionSide };
+      return;
+    }
+
+    void this.tryApplyMove(from, to, null);
+  }
+
+  private async tryApplyMove(from: string, to: string, promotion: 'q' | 'r' | 'b' | 'n' | null): Promise<void> {
     this.isSubmittingMove = true;
     this.statusMessage = null;
 
@@ -488,7 +536,7 @@ export class ChessboardComponent implements OnChanges {
           fen: this.currentFen,
           from,
           to,
-          promotion: this.isPawnPromotion(from, to) ? 'q' : null
+          promotion
         })
       );
 
@@ -530,12 +578,15 @@ export class ChessboardComponent implements OnChanges {
     this.currentFen = this.startFen;
     this.pieces = this.parseFenToPieces(this.currentFen);
     this.selectedSquare = null;
+    this.pendingPromotionMove = null;
     this.statusMessage = null;
     this.emitNavigationState();
     this.emitMoveRows();
   }
 
   private applySuccessfulMove(nextFen: string, san: string): void {
+    this.pendingPromotionMove = null;
+
     const continuationFen = this.fenHistory[this.currentPly + 1];
     if (this.currentPly < this.sanHistory.length && continuationFen === nextFen) {
       this.currentPly++;
@@ -573,6 +624,7 @@ export class ChessboardComponent implements OnChanges {
     this.currentFen = this.fenHistory[this.currentPly] ?? START_FEN;
     this.pieces = this.parseFenToPieces(this.currentFen);
     this.selectedSquare = null;
+    this.pendingPromotionMove = null;
     this.statusMessage = null;
     this.emitNavigationState();
   }
@@ -908,14 +960,22 @@ export class ChessboardComponent implements OnChanges {
     return fenParts[1] === 'b' ? 'b' : 'w';
   }
 
-  private isPawnPromotion(from: string, to: string): boolean {
+  private getPromotionSide(from: string, to: string): 'w' | 'b' | null {
     const piece = this.getPieceAtSquare(from);
     if (!piece || (piece.type !== 'wp' && piece.type !== 'bp')) {
-      return false;
+      return null;
     }
 
     const targetRank = to[1];
-    return (piece.type === 'wp' && targetRank === '8') || (piece.type === 'bp' && targetRank === '1');
+    if (piece.type === 'wp' && targetRank === '8') {
+      return 'w';
+    }
+
+    if (piece.type === 'bp' && targetRank === '1') {
+      return 'b';
+    }
+
+    return null;
   }
 
   private displayCoordsToSquare(displayX: number, displayY: number): string {
