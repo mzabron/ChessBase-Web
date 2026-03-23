@@ -17,6 +17,7 @@ public class ChessXivDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Position> Positions { get; set; }
     public DbSet<UserDatabase> UserDatabases { get; set; }
     public DbSet<UserDatabaseGame> UserDatabaseGames { get; set; }
+    public DbSet<UserDatabaseBookmark> UserDatabaseBookmarks { get; set; }
     public DbSet<StagingImportSession> StagingImportSessions { get; set; }
     public DbSet<StagingGame> StagingGames { get; set; }
     public DbSet<StagingMove> StagingMoves { get; set; }
@@ -112,6 +113,27 @@ public class ChessXivDbContext : IdentityDbContext<ApplicationUser>
                 .HasOne(x => x.Game)
                 .WithMany(g => g.UserDatabaseGames)
                 .HasForeignKey(x => x.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserDatabaseBookmark>(entity =>
+        {
+            entity.HasKey(x => new { x.UserId, x.UserDatabaseId });
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
+            entity.HasIndex(x => x.UserDatabaseId);
+
+            entity
+                .HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity
+                .HasOne(x => x.UserDatabase)
+                .WithMany(d => d.Bookmarks)
+                .HasForeignKey(x => x.UserDatabaseId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

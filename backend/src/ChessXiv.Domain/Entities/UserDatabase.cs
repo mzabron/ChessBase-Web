@@ -9,4 +9,5 @@ public class UserDatabase
     public DateTime CreatedAtUtc { get; set; }
 
     public ICollection<UserDatabaseGame> UserDatabaseGames { get; set; } = new List<UserDatabaseGame>();
+    public ICollection<UserDatabaseBookmark> Bookmarks { get; set; } = new List<UserDatabaseBookmark>();
 }

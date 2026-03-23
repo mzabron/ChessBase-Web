@@ -38,6 +38,34 @@ public class UserDatabasesController(ChessXivDbContext dbContext) : ControllerBa
         return Ok(items);
     }
 
+    [Authorize]
+    [HttpGet("bookmarks")]
+    public async Task<IActionResult> GetBookmarks(CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var items = await dbContext.UserDatabaseBookmarks
+            .AsNoTracking()
+            .Where(b => b.UserId == userId)
+            .Where(b => b.UserDatabase.IsPublic || b.UserDatabase.OwnerUserId == userId)
+            .OrderByDescending(b => b.CreatedAtUtc)
+            .Select(b => new BookmarkedUserDatabaseDto(
+                b.UserDatabase.Id,
+                b.UserDatabase.Name,
+                b.UserDatabase.IsPublic,
+                b.UserDatabase.OwnerUserId,
+                b.UserDatabase.UserDatabaseGames.Count,
+                b.UserDatabase.CreatedAtUtc,
+                b.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+
+        return Ok(items);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -172,6 +200,74 @@ public class UserDatabasesController(ChessXivDbContext dbContext) : ControllerBa
         }
 
         dbContext.UserDatabases.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/bookmark")]
+    public async Task<IActionResult> AddBookmark(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var dbEntity = await dbContext.UserDatabases
+            .AsNoTracking()
+            .Where(d => d.Id == id)
+            .Select(d => new { d.Id, d.IsPublic, d.OwnerUserId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (dbEntity is null)
+        {
+            return NotFound();
+        }
+
+        if (!dbEntity.IsPublic && dbEntity.OwnerUserId != userId)
+        {
+            return Forbid();
+        }
+
+        var alreadyExists = await dbContext.UserDatabaseBookmarks
+            .AnyAsync(x => x.UserId == userId && x.UserDatabaseId == id, cancellationToken);
+
+        if (alreadyExists)
+        {
+            return Ok(new { IsBookmarked = true, Created = false });
+        }
+
+        dbContext.UserDatabaseBookmarks.Add(new UserDatabaseBookmark
+        {
+            UserId = userId,
+            UserDatabaseId = id,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Ok(new { IsBookmarked = true, Created = true });
+    }
+
+    [Authorize]
+    [HttpDelete("{id:guid}/bookmark")]
+    public async Task<IActionResult> RemoveBookmark(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var bookmark = await dbContext.UserDatabaseBookmarks
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.UserDatabaseId == id, cancellationToken);
+
+        if (bookmark is null)
+        {
+            return NoContent();
+        }
+
+        dbContext.UserDatabaseBookmarks.Remove(bookmark);
         await dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
     }

@@ -176,6 +176,106 @@ public class UserDatabaseIntegrationTests(PostgresTestFixture fixture)
         Assert.Equal(1, await dbContext.Games.CountAsync());
     }
 
+    [Fact]
+    public async Task Bookmarks_SameUserCanBookmarkSameDatabaseOnlyOnce()
+    {
+        await fixture.ResetDatabaseAsync();
+
+        await using var dbContext = fixture.CreateDbContext();
+
+        var owner = new ApplicationUser
+        {
+            Id = "owner-1",
+            UserName = "owner_one",
+            Email = "owner.one@example.com"
+        };
+
+        var viewer = new ApplicationUser
+        {
+            Id = "viewer-1",
+            UserName = "viewer_one",
+            Email = "viewer.one@example.com"
+        };
+
+        var userDatabase = new UserDatabase
+        {
+            Id = Guid.NewGuid(),
+            Name = "Public Db",
+            IsPublic = true,
+            OwnerUserId = owner.Id,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        dbContext.Users.AddRange(owner, viewer);
+        dbContext.UserDatabases.Add(userDatabase);
+
+        dbContext.UserDatabaseBookmarks.Add(new UserDatabaseBookmark
+        {
+            UserId = viewer.Id,
+            UserDatabaseId = userDatabase.Id,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+
+        dbContext.UserDatabaseBookmarks.Add(new UserDatabaseBookmark
+        {
+            UserId = viewer.Id,
+            UserDatabaseId = userDatabase.Id,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task DataIntegrity_DeleteUserDatabase_DeletesBookmarksForThatDatabase()
+    {
+        await fixture.ResetDatabaseAsync();
+
+        await using var dbContext = fixture.CreateDbContext();
+
+        var owner = new ApplicationUser
+        {
+            Id = "owner-1",
+            UserName = "owner_one",
+            Email = "owner.one@example.com"
+        };
+
+        var viewer = new ApplicationUser
+        {
+            Id = "viewer-1",
+            UserName = "viewer_one",
+            Email = "viewer.one@example.com"
+        };
+
+        var userDatabase = new UserDatabase
+        {
+            Id = Guid.NewGuid(),
+            Name = "Public Db",
+            IsPublic = true,
+            OwnerUserId = owner.Id,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        dbContext.Users.AddRange(owner, viewer);
+        dbContext.UserDatabases.Add(userDatabase);
+        dbContext.UserDatabaseBookmarks.Add(new UserDatabaseBookmark
+        {
+            UserId = viewer.Id,
+            UserDatabaseId = userDatabase.Id,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync();
+
+        dbContext.UserDatabases.Remove(userDatabase);
+        await dbContext.SaveChangesAsync();
+
+        Assert.Equal(0, await dbContext.UserDatabaseBookmarks.CountAsync());
+    }
+
     private static UserManager<ApplicationUser> CreateUserManager(ChessXivDbContext dbContext)
     {
         return new UserManager<ApplicationUser>(
