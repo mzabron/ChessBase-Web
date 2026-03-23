@@ -1,28 +1,30 @@
 # ChessXiv Backend Documentation
 
-## 1. Scope and Intent
-This document describes the backend implementation in `backend/` as it exists in source code today. It covers:
+This document describes the backend implementation under `backend/`. The schema diagram companion for this document is `docs/database-schema.png`.
 
-- Solution structure and project responsibilities
-- Runtime pipeline and dependency injection
-- API surface (routes, auth, DTOs, and behavior)
-- Application services and business workflows
-- Domain model and persistence mapping
-- Chess engine/position subsystem
-- Import/explorer pipelines
-- Security model (Identity + JWT)
-- Testing strategy and coverage map
-- Operations (run, migrate, test)
-- Full source component index
+## 1. Scope
 
-This document intentionally focuses on backend source components and excludes generated `bin/` and `obj/` artifacts.
+This documentation covers:
 
----
+1. Solution structure and layer responsibilities
+2. Runtime bootstrap, dependency injection, middleware, and configuration
+3. Authentication and security model
+4. HTTP API surface and endpoint behavior
+5. Application services and repository behavior
+6. Domain entities and database mapping
+7. Chess engine and position processing
+8. Import, draft, promotion, and explorer workflows
+9. CLI import path
+10. Testing strategy and coverage map
+11. Operations and developer commands
 
-## 2. Backend Topology
+This document intentionally excludes generated files and build artifacts such as `bin/` and `obj/`.
 
-### 2.1 Solution and Projects
-Primary solution file:
+## 2. Solution Topology
+
+### 2.1 Projects
+
+Primary solution:
 
 - `backend/ChessXiv.sln`
 
@@ -41,45 +43,51 @@ Test projects:
 
 ### 2.2 Layer Responsibilities
 
-- `ChessXiv.Api`: ASP.NET Core host, HTTP controllers, auth endpoints, JWT integration, middleware pipeline.
-- `ChessXiv.Application`: service layer for PGN import, draft workflows, game explorer orchestration, normalization and hash strategies.
-- `ChessXiv.Domain`: entities and chess-engine primitives (board state, SAN transition, FEN serializer, Zobrist hashing).
-- `ChessXiv.Infrastructure`: EF Core DbContext, migrations, repositories, unit-of-work implementation.
-- `ChessXiv.Cli`: command-line PGN import runner for master import scenarios.
+- `ChessXiv.Api`: ASP.NET Core host, controllers, auth endpoints, JWT, CORS, exception handling.
+- `ChessXiv.Application`: use-case orchestration (PGN import, draft import/promotion, explorer, position play, hashing/normalization).
+- `ChessXiv.Domain`: chess entities and engine primitives (board state, SAN transition, FEN serialization, Zobrist hashing).
+- `ChessXiv.Infrastructure`: EF Core DbContext, migrations, repository implementations, unit-of-work, quota service.
+- `ChessXiv.Cli`: headless importer for marking imported games as master data.
 
-### 2.3 Package/Runtime Baseline
-From project files and references:
+### 2.3 Platform and Packages
 
-- .NET target: `net10.0`
-- ASP.NET Core Web API
-- EF Core + Npgsql provider (PostgreSQL)
-- ASP.NET Core Identity (via `IdentityDbContext<ApplicationUser>`)
-- JWT Bearer authentication
-- xUnit test stack (`xunit`, `Microsoft.NET.Test.Sdk`, `coverlet.collector`)
-- Integration test infra: `Microsoft.AspNetCore.Mvc.Testing`, `Testcontainers.PostgreSql`
+- .NET target framework: `net10.0` (all projects).
+- Database: PostgreSQL via `Npgsql.EntityFrameworkCore.PostgreSQL`.
+- ORM: EF Core 10.
+- Identity: ASP.NET Core Identity (`IdentityDbContext<ApplicationUser>`).
+- Auth: JWT Bearer (`Microsoft.AspNetCore.Authentication.JwtBearer`).
+- Tests: xUnit + `Microsoft.NET.Test.Sdk` + `coverlet.collector`.
+- Integration tests: `Microsoft.AspNetCore.Mvc.Testing` + `Testcontainers.PostgreSql`.
 
----
+## 3. Runtime Bootstrap
 
-## 3. Runtime Bootstrap and Request Pipeline
 Source: `backend/src/ChessXiv.Api/Program.cs`
 
 ### 3.1 Startup Sequence
 
-1. Create web host builder.
-2. Register controllers and problem-details support.
-3. Bind JWT options from configuration section `Jwt`.
-4. Validate `Jwt:SigningKey` is present; throw if missing.
-5. Configure EF Core with PostgreSQL connection string `DefaultConnection`.
-6. Configure IdentityCore for `ApplicationUser` with password policy.
-7. Configure JWT bearer validation parameters.
-8. Register authorization.
-9. Register all application/infrastructure/domain services in DI container.
-10. Build app.
-11. Install global exception handler middleware.
-12. Enable authentication and authorization middleware.
-13. Map controllers and run.
+1. Build web app host.
+2. Register MVC controllers and problem details.
+3. Register CORS policy `Frontend` with:
+   - `AllowAnyOrigin`
+   - `AllowAnyMethod`
+   - `AllowAnyHeader`
+4. Bind JWT options from `Jwt` section.
+5. Enforce presence of `Jwt:SigningKey` (throws `InvalidOperationException` if missing).
+6. Register `ChessXivDbContext` (Npgsql, `ConnectionStrings:DefaultConnection`).
+7. Configure IdentityCore and token providers.
+8. Configure JWT bearer validation parameters.
+9. Register authorization services.
+10. Register application/infrastructure/domain services.
+11. Build app.
+12. Install global exception handler.
+13. Enable authentication.
+14. Enable CORS policy `Frontend`.
+15. Enable authorization.
+16. Map controllers and run.
 
-### 3.2 Service Registration Map (Scoped)
+### 3.2 Dependency Injection Registration
+
+Registered as scoped:
 
 - `IPgnParser -> PgnService`
 - `IGameRepository -> GameRepository`
@@ -97,797 +105,611 @@ Source: `backend/src/ChessXiv.Api/Program.cs`
 - `IDraftImportService -> DraftImportService`
 - `IDraftPromotionService -> DraftPromotionService`
 - `IGameExplorerService -> GameExplorerService`
+- `IPositionPlayService -> PositionPlayService`
+- `IQuotaService -> UserQuotaService`
 - `IJwtTokenService -> JwtTokenService`
 - `IEmailSender -> LoggingEmailSender`
 
 ### 3.3 Middleware Behavior
 
-Global exception middleware:
+Global exception handler:
 
-- Captures unhandled exception (`IExceptionHandlerFeature`)
-- Logs with category `GlobalExceptionHandler`
-- Returns standardized `ProblemDetails` with HTTP 500:
-  - `Title`: `Internal Server Error`
-  - `Detail`: generic error message
-  - `Instance`: request path
+- Logs exception with category `GlobalExceptionHandler`.
+- Returns HTTP `500` with JSON `ProblemDetails`:
+  - `Title = Internal Server Error`
+  - `Detail = An unexpected error occurred. Please try again later.`
+  - `Status = 500`
+  - `Instance = request path`
 
-Then standard auth pipeline:
+Pipeline order:
 
-- `UseAuthentication()`
-- `UseAuthorization()`
-- `MapControllers()`
+1. `UseExceptionHandler(...)`
+2. `UseAuthentication()`
+3. `UseCors("Frontend")`
+4. `UseAuthorization()`
+5. `MapControllers()`
 
----
+## 4. Configuration
 
-## 4. Security and Identity Model
+Primary files:
 
-### 4.1 Identity User
+- `backend/src/ChessXiv.Api/appsettings.json`
+- `backend/src/ChessXiv.Api/appsettings.Example.json`
+
+### 4.1 Connection Strings
+
+- Key: `ConnectionStrings:DefaultConnection`
+- Format: PostgreSQL connection string
+
+### 4.2 JWT Options (`Jwt`)
+
+- `Issuer` (default: `ChessXiv.Api`)
+- `Audience` (default: `ChessXiv.Web`)
+- `SigningKey` (required)
+- `ExpirationMinutes` (default: `60`)
+
+### 4.3 CLI Configuration
+
+CLI (`backend/src/ChessXiv.Cli/Program.cs`) resolves connection string from:
+
+1. `CHESSXIV_CONNECTION_STRING` environment variable
+2. `ConnectionStrings:DefaultConnection`
+
+PGN path resolution order:
+
+1. first positional CLI argument
+2. `CHESSXIV_PGN_PATH` env var
+3. ancestor search fallback to `backend/tests/TestData/games_sample.pgn`
+
+## 5. Security Model
+
+### 5.1 Identity User
+
 Source: `backend/src/ChessXiv.Infrastructure/Data/ApplicationUser.cs`
 
-`ApplicationUser` extends `IdentityUser` and adds:
+`ApplicationUser` extends `IdentityUser` with:
 
-- `CreatedAtUtc`
+- `CreatedAtUtc: DateTime`
+- `UserTier: string` (default `Free`)
 
-### 4.2 Password Policy
+Tier semantics note:
+
+- `Free` and `Premium` are internal/admin indicators used to control storage and quota limits.
+- They do not represent public paid subscription plans.
+
+### 5.2 Password Policy
+
 Configured in `Program.cs`:
 
-- Minimum length: 8
-- Require digit: true
-- Require uppercase: true
-- Require lowercase: true
-- Require non-alphanumeric: false
-- Require unique email: true
+- minimum length `8`
+- require digit `true`
+- require uppercase `true`
+- require lowercase `true`
+- require non-alphanumeric `false`
+- unique email `true`
 
-### 4.3 JWT Configuration
-Sources:
+### 5.3 JWT Claims and Validation
 
-- `backend/src/ChessXiv.Api/Authentication/JwtOptions.cs`
-- `backend/src/ChessXiv.Api/Authentication/JwtTokenService.cs`
+Token generation source: `backend/src/ChessXiv.Api/Authentication/JwtTokenService.cs`
 
-Defaults:
+Claims added:
 
-- Issuer: `ChessXiv.Api`
-- Audience: `ChessXiv.Web`
-- Expiration: 60 minutes
+- `sub` (`JwtRegisteredClaimNames.Sub`) = user id
+- `unique_name` = username
+- `email` = email
+- `ClaimTypes.NameIdentifier` = user id
+- `ClaimTypes.Name` = username
 
-Token claims added:
+Token validation settings:
 
-- `sub` (`JwtRegisteredClaimNames.Sub`) => user id
-- `unique_name` => username
-- `email` => email
-- `ClaimTypes.NameIdentifier` => user id
-- `ClaimTypes.Name` => username
+- issuer, audience, signing key, lifetime all validated
+- clock skew = 1 minute
 
-Validation settings:
+### 5.4 Password Reset
 
-- Validate issuer, audience, signing key, and lifetime
-- Clock skew: 1 minute
-
-### 4.4 Password Reset Behavior
 Source: `backend/src/ChessXiv.Api/Controllers/AuthController.cs`
 
-- Forgot password endpoint generates Identity reset token.
-- Token is Base64Url-encoded before sending.
-- Reset endpoint Base64Url-decodes token and calls `ResetPasswordAsync`.
-- Email sender implementation currently logs to app logger (`LoggingEmailSender`), not SMTP.
+- reset token generated via Identity
+- token is Base64Url-encoded before send
+- reset endpoint Base64Url-decodes received token
+- forgot-password always returns success text even if user does not exist
+- email transport is currently logging only (`LoggingEmailSender`)
 
----
+## 6. API Surface
 
-## 5. API Contract and Controller Surface
+### 6.1 Auth (`api/auth`)
 
-### 5.1 `AuthController`
 Source: `backend/src/ChessXiv.Api/Controllers/AuthController.cs`
-Base route: `api/auth`
-
-Endpoints:
 
 1. `POST /api/auth/register`
+   - request: `AuthRegisterRequest(login, email, password)`
+   - response: `AuthTokenResponse`
+   - validation: all fields required
+
 2. `POST /api/auth/login`
+   - request: `AuthLoginRequest(login, password)`
+   - lookup: username first, then email
+   - response: `AuthTokenResponse`
+
 3. `POST /api/auth/forgot-password`
+   - request: `ForgotPasswordRequest(email)`
+   - always returns `200` generic message
+
 4. `POST /api/auth/reset-password`
+   - request: `ResetPasswordRequest(email, token, newPassword)`
+   - validates token format and Identity reset result
 
-Behavior highlights:
+### 6.2 PGN Import (`api/pgn`)
 
-- Input guard clauses with `BadRequest` on missing required fields.
-- Register uses `UserManager.CreateAsync`, then returns JWT token.
-- Login accepts username or email for lookup.
-- Forgot-password returns success message regardless of user existence (no account enumeration).
-- Reset-password validates token format and identity errors.
-
-### 5.2 `PgnImportController`
 Source: `backend/src/ChessXiv.Api/Controllers/PgnImportController.cs`
-Base route: `api/pgn`
 
-Endpoints:
+1. `POST /api/pgn/import` (anonymous)
+   - request: `PgnImportRequest(pgn)`
+   - response: `PgnImportResult(parsedCount, importedCount, skippedCount)`
 
-1. `POST /api/pgn/import` (public)
-2. `POST /api/pgn/drafts/import` (authorized)
-3. `POST /api/pgn/drafts/{importSessionId:guid}/promote` (authorized)
+2. `POST /api/pgn/drafts/import` (`[Authorize]`)
+   - request: `DraftImportRequest(pgn, importSessionId?)`
+   - response: `DraftImportResult(importSessionId, parsedCount, importedCount, skippedCount, expiresAtUtc)`
 
-Behavior highlights:
+3. `POST /api/pgn/drafts/{importSessionId}/promote` (`[Authorize]`)
+   - request: `DraftPromotionRequest(userDatabaseId, duplicateHandling)`
+   - duplicate handling enum:
+     - `KeepExisting`
+     - `OverrideMetadata`
+   - response: `DraftPromotionResult(importSessionId, promotedCount, duplicateCount, overriddenCount, skippedCount)`
 
-- Uses `StringReader` on PGN request payload.
-- Draft endpoints resolve current user id from `ClaimTypes.NameIdentifier` or `sub`.
-- Promote requires non-empty `UserDatabaseId`.
+Current user id extraction in draft endpoints:
 
-### 5.3 `GameExplorerController`
+- `ClaimTypes.NameIdentifier` fallback to `sub`
+
+### 6.3 Game Explorer (`api/games/explorer`)
+
 Source: `backend/src/ChessXiv.Api/Controllers/GameExplorerController.cs`
-Base route: `api/games/explorer`
 
-Endpoints:
+1. `POST /api/games/explorer/search` (`[AllowAnonymous]`)
+   - request: `GameExplorerSearchRequest`
+   - response: `PagedResult<GameExplorerItemDto>`
+   - maps `ForbiddenException` to `403`
+   - maps `KeyNotFoundException` to `404`
 
-1. `POST /api/games/explorer/search` (public)
-2. `POST /api/games/explorer/move-tree` (authorized)
+2. `POST /api/games/explorer/position/move` (no auth attribute; currently anonymous)
+   - request: `PositionMoveRequest(fen, from, to, promotion?)`
+   - response: `PositionMoveResponse(isValid, fen?, san?, error?)`
 
-Behavior highlights:
+3. `POST /api/games/explorer/move-tree` (`[Authorize]`)
+   - request: `MoveTreeRequest(fen, source, userDatabaseId?, importSessionId?, maxMoves)`
+   - response: `MoveTreeResponse(totalGamesInPosition, moves[])`
+   - source enum:
+     - `UserDatabase`
+     - `StagingSession`
 
-- Search requires request body only.
-- Move-tree validates:
-  - `Fen` is required
-  - `UserDatabaseId` required when `Source=UserDatabase`
-  - `ImportSessionId` required when `Source=StagingSession`
+### 6.4 User Databases (`api/user-databases`)
 
-### 5.4 `UserDatabasesController`
 Source: `backend/src/ChessXiv.Api/Controllers/UserDatabasesController.cs`
-Base route: `api/user-databases`
 
-Endpoints:
+1. `GET /api/user-databases/mine` (`[Authorize]`)
+   - returns owned DB list (`UserDatabaseDto[]`)
 
-1. `GET /api/user-databases/mine` (authorized)
-2. `GET /api/user-databases/{id}` (public for public dbs, owner for private)
-3. `POST /api/user-databases` (authorized)
-4. `PUT /api/user-databases/{id}` (authorized owner)
-5. `DELETE /api/user-databases/{id}` (authorized owner)
-6. `POST /api/user-databases/{id}/games` (authorized owner)
-7. `DELETE /api/user-databases/{id}/games/{gameId}` (authorized owner)
+2. `GET /api/user-databases/bookmarks` (`[Authorize]`)
+   - returns bookmarked DB list (`BookmarkedUserDatabaseDto[]`)
+   - only visible bookmarks: public DBs or own private DBs
 
-Behavior highlights:
+3. `GET /api/user-databases/{id}`
+   - returns `UserDatabaseDto`
+   - private DB access restricted to owner
 
-- Name uniqueness enforced per owner (`Conflict` on duplicate).
-- `AddGames` validates game IDs exist and avoids duplicate links.
-- Adds metadata snapshot (`Date`, `Year`, `Event`, `Round`, `Site`) from `Game` into `UserDatabaseGame`.
+4. `POST /api/user-databases` (`[Authorize]`)
+   - request: `CreateUserDatabaseRequest(name, isPublic)`
+   - enforces owner+name uniqueness
 
----
+5. `PUT /api/user-databases/{id}` (`[Authorize]`)
+   - request: `UpdateUserDatabaseRequest(name, isPublic)`
+   - owner-only, uniqueness preserved
 
-## 6. Application Layer Deep Dive
+6. `DELETE /api/user-databases/{id}` (`[Authorize]`)
+   - owner-only delete
 
-### 6.1 `PgnImportService`
+7. `POST /api/user-databases/{id}/bookmark` (`[Authorize]`)
+   - creates bookmark if not already present
+
+8. `DELETE /api/user-databases/{id}/bookmark` (`[Authorize]`)
+   - idempotent removal
+
+9. `POST /api/user-databases/{id}/games` (`[Authorize]`)
+   - request: `AddGamesToDatabaseRequest(gameIds[])`
+   - verifies all game IDs exist
+   - skips already-linked game IDs
+   - stores metadata snapshot on join row (`Date`, `Year`, `Event`, `Round`, `Site`)
+
+10. `DELETE /api/user-databases/{id}/games/{gameId}` (`[Authorize]`)
+    - removes game link from selected DB
+
+## 7. Application Services
+
+### 7.1 PGN Import Service
+
 Source: `backend/src/ChessXiv.Application/Services/PgnImportService.cs`
 
-Purpose:
+Responsibilities:
 
-- Parse PGN stream and persist `Game` records in batches.
-- Resolve/create normalized `Player` entities.
-- Compute game hash and position chain for each game.
+- parse PGN stream via `IPgnParser`
+- skip games without white or black player names
+- optional `markAsMaster`
+- compute:
+  - `Year` from date
+  - `MoveCount`
+  - `GameHash`
+- resolve/create players from normalized names
+- populate full position chain for each game
+- persist in batches and clear EF change tracker after each batch
 
-Key behavior:
+### 7.2 Draft Import Service
 
-- Validates non-null reader and positive batch size.
-- Skips games missing white/black names.
-- Sets `IsMaster` via `markAsMaster` argument.
-- For each persisted batch:
-  - Set `Year` from `Date`
-  - Set `MoveCount`
-  - Compute `GameHash`
-  - Resolve players via normalized full names
-  - Populate positions using position coordinator
-  - `AddRangeAsync` games and `SaveChangesAsync`
-  - Clear change tracker after save
-
-### 6.2 `DraftImportService`
 Source: `backend/src/ChessXiv.Application/Services/DraftImportService.cs`
 
-Purpose:
-
-- Import PGN into staging scope tied to user and import session.
-
 Key behavior:
 
-- Session TTL: 7 days (`DefaultDraftTtl`).
-- Supports continuation import into existing session when `importSessionId` provided.
-- Rejects missing owner id, invalid batch size, expired/already promoted sessions.
-- Maps parsed `Game` to `StagingGame` with `StagingMove` list.
-- Uses transient `Game` conversion to reuse position coordinator.
-- Rehydrates computed positions into `StagingPosition` rows.
-- Saves batch and clears tracker.
+- per-user draft session model with 7-day TTL (`DefaultDraftTtl`)
+- if no `importSessionId`:
+  - deletes previous unpromoted sessions for owner
+  - creates a fresh session
+- if `importSessionId` provided:
+  - verifies ownership, not promoted, not expired
+- enforces quota from `IQuotaService`
+- quota thresholds from `UserQuotaService`:
+   - guest: `200_000` (same as `Free`)
+  - free: `200_000`
+   - premium: `unlimited` (`int.MaxValue`)
+- `Free`/`Premium` labels are operational quota flags only (admin-side), not monetized subscription tiers.
+- wraps import in transaction
+- maps parsed `Game` to `StagingGame`, computes hash, includes moves
+- computes staging positions by converting to transient `Game` and reusing `PositionImportCoordinator`
+- clears tracker after batch save
 
-### 6.3 `DraftPromotionService`
+### 7.3 Draft Promotion Service
+
 Source: `backend/src/ChessXiv.Application/Services/DraftPromotionService.cs`
 
-Purpose:
-
-- Promote user staging games into main `Games` and link into a target `UserDatabase`.
-
 Key behavior:
 
-- Promotion batch size constant: 500.
-- Validates session exists, not promoted, target database exists and belongs to owner.
-- Wraps promotion in unit-of-work transaction.
-- For each staging page:
-  - Query existing links in target db by `GameHash`
-  - If duplicate:
-    - `OverrideMetadata`: update existing link metadata
-    - otherwise skip
-  - If new game:
-    - map to main `Game` + `Move` + `Position`
-    - resolve players
-    - add game and `UserDatabaseGame` link
-  - remove promoted staging rows
-  - save + clear tracker
-- Marks session promoted and commits transaction.
-- Rolls back transaction on exception.
+- promotion batch size `500`
+- validates:
+  - session exists, owner matches, not already promoted
+  - target DB exists and belongs to owner
+- transactional promotion (`IUnitOfWork.BeginTransactionAsync`)
+- duplicate detection by `GameHash` within target user database
+- duplicate handling:
+  - `KeepExisting`: skip duplicate
+  - `OverrideMetadata`: update existing join metadata
+- for new games:
+  - maps staging to new main `Game` (new IDs for `Game`/`Move`/`Position`)
+  - resolves players (create missing by normalized name)
+  - inserts `UserDatabaseGame` link
+- deletes promoted staging rows
+- marks session as promoted (`PromotedAtUtc`)
+- rollback on exception
 
-### 6.4 `GameExplorerService`
+### 7.4 Explorer Service
+
 Source: `backend/src/ChessXiv.Application/Services/GameExplorerService.cs`
 
 Search behavior:
 
-- Normalizes optional white/black first and last names.
-- Fetches candidate player ids by normalized names.
-- Early returns empty result when a requested player filter has no matches.
-- Normalizes FEN (trim) when position search enabled.
-- Exact mode computes hash from parsed board state.
-- Subset mode requires provided FEN string.
-- Calls repository with resolved IDs, normalized fen, and fen hash.
+- validates access to specific user database (if provided)
+- normalizes pagination (`page >= 1`, `pageSize <= 200`, default `50`)
+- normalizes player filters via `PlayerNameNormalizer`
+- resolves player IDs from partial name matching
+- early-empty if requested white/black filter has no matching player IDs
+- position filtering:
+  - `Exact`: parse FEN and compute Zobrist hash
+  - `Subset`: requires non-empty FEN input
 
-Move tree behavior:
+Move-tree behavior:
 
-- Requires owner user id.
-- Empty/whitespace FEN returns empty response.
-- Clamps `MaxMoves` to 1..100 with default 20.
-- Parses FEN, computes hash, delegates to repository.
-- Computes per-move percentages (`WhiteWinPct`, `DrawPct`, `BlackWinPct`) rounded to 2 decimals.
+- requires non-empty owner user id
+- normalizes and parses FEN
+- computes fen hash for repository query
+- clamps `MaxMoves` to `1..100` (default `20`)
+- computes and rounds outcome percentages to two decimals
 
-### 6.5 `PgnService`
+### 7.5 Position Play Service
+
+Source: `backend/src/ChessXiv.Application/Services/PositionPlayService.cs`
+
+Purpose:
+
+- apply one move from client coordinates (`from`/`to`) to a FEN position
+- return validated SAN and resulting FEN
+
+Highlights:
+
+- validates coordinate format (`a1`-`h8`)
+- validates source piece belongs to side-to-move
+- defaults pawn promotion to queen when destination rank is promotion rank and explicit promotion is missing
+- generates SAN candidates (including castling and disambiguations), tests candidates via `TryApplySan`, then verifies resulting board matches requested move
+- returns structured invalid reasons instead of throwing
+
+### 7.6 Parser and Utility Services
+
+### PGN Parser (`PgnService`)
+
 Source: `backend/src/ChessXiv.Application/Services/PgnService.cs`
 
-Responsibilities:
+- async stream parsing (`IAsyncEnumerable<Game>`)
+- robust game block detection for streamed input
+- parses tags, moves, comments
+- extracts `%eval` and `%clk` from comment payloads
+- supports both `1.` and `1...` numbering patterns
+- ignores result tokens and variation parentheses during move list parse
+- infers trailing result token if result tag is `*`
+- date handling:
+  - parse exact `yyyy.MM.dd`
+  - fallback to year extraction when full date not parseable
 
-- Parse PGN from string or stream (`IAsyncEnumerable<Game>`).
-- Split game blocks and parse tags/moves.
-- Capture move annotations (`%eval`, `%clk`) from comments.
-- Infer trailing result token when needed.
+### Game Hash (`GameHashCalculator`)
 
-Notable parser details:
+Source: `backend/src/ChessXiv.Application/Services/GameHashCalculator.cs`
 
-- Game separators: 3+ blank lines for static parse; stream parser uses tag/move boundary logic.
-- Tag parsing regex: `[Tag "Value"]` format.
-- Supports both move number forms (`1.` and `1...`).
-- Ignores variation parentheses tokens and result tokens in move parsing.
-- Parses `UTCDate` fallback to `Date` and can extract year even when full date unavailable.
+- SHA-256 hash over normalized players + normalized move stream
+- normalizes castling notation (`0-0`/`0-0-0` to `O-O`/`O-O-O`)
+- strips SAN annotations (`+`, `#`, `?`, `!`)
+- strips en-passant notation markers
+- supports UCI-like move token normalization for stable comparisons
 
-### 6.6 Utility Services
+### Player Name Normalizer
 
-`GameHashCalculator` (`backend/src/ChessXiv.Application/Services/GameHashCalculator.cs`):
+Source: `backend/src/ChessXiv.Application/Services/PlayerNameNormalizer.cs`
 
-- Builds SHA-256 hash from normalized players + normalized move token stream.
-- Castling normalization `0-0 -> O-O`, `0-0-0 -> O-O-O`.
-- Removes SAN annotations (`+`, `#`, `?`, `!`) for comparison stability.
-- Handles UCI-like token normalization for comparable hash payload.
+- trims and lowercases
+- removes diacritics via unicode decomposition
+- collapses whitespace
+- transliteration map for selected characters (`l`/`d` cases)
+- supports both `Last, First` and `First ... Last` name parsing
 
-`PlayerNameNormalizer` (`backend/src/ChessXiv.Application/Services/PlayerNameNormalizer.cs`):
+### Position Import Coordinator
 
-- Trims, decomposes unicode, strips diacritics, lowercases.
-- Collapses whitespace.
-- Minimal transliteration map for `ł`, `đ`, `ð`.
-- Parses `Last, First` or `First ... Last` into parts.
+Source: `backend/src/ChessXiv.Application/Services/PositionImportCoordinator.cs`
 
-`PositionImportCoordinator` (`backend/src/ChessXiv.Application/Services/PositionImportCoordinator.cs`):
-
-- Builds initial board state template.
-- Replays SAN moves using board transition service.
-- Records position snapshots each ply with:
+- starts from initial board state
+- appends starting position at ply `0`
+- replays SAN moves in order
+- adds one `Position` per half-move (ply)
+- stores:
   - `Fen`
-  - `FenHash` (`ZobristKey`)
+  - `FenHash`
   - `PlyCount`
   - `LastMove`
-  - `SideToMove` (`w`/`b`)
-- Stops replay for a game when move application fails.
+  - `SideToMove`
+- stops processing current game if SAN application fails at any step
 
----
+## 8. Repository Behavior
 
-## 7. Domain Model and Chess Engine
+### 8.1 Game Explorer Repository
 
-### 7.1 Core Entity Catalog
-Sources: `backend/src/ChessXiv.Domain/Entities/*.cs`
+Source: `backend/src/ChessXiv.Infrastructure/Repositories/GameExplorerRepository.cs`
 
-Primary entities:
+Search dataset rules:
 
-- `Game`
-- `Move`
-- `Player`
-- `Position`
-- `UserDatabase`
-- `UserDatabaseGame`
-- `StagingImportSession`
-- `StagingGame`
-- `StagingMove`
-- `StagingPosition`
+- when `UserDatabaseId` set: query only that DB (access-checked)
+- otherwise: aggregate distinct games from:
+  - public user DBs
+  - owner's own DBs (if authenticated)
 
-Modeling characteristics:
+Filters supported:
 
-- `Game` holds canonical PGN metadata plus player IDs and hash.
-- `Move` and `Position` form detailed move/position timeline.
-- `UserDatabaseGame` is a many-to-many link with metadata snapshot fields.
-- Staging entities mirror main entities for draft pipeline isolation.
+- player filters by white/black IDs with optional color-agnostic mode (`IgnoreColors`)
+- ELO filters (`One`, `Both`, `Avg`)
+- year range
+- ECO prefix
+- exact result
+- move count range
+- position filters:
+  - exact by `FenHash` (+ exact `Fen` string when provided)
+  - subset by piece placement using SQL `LIKE`
 
-### 7.2 DbContext Mapping and Index Strategy
-Source: `backend/src/ChessXiv.Infrastructure/Data/ChessXivDbContext.cs`
+Sorting options:
 
-Selected constraints/indexes:
+- `Year`, `White`, `WhiteElo`, `Result`, `Black`, `BlackElo`, `Eco`, `Event`, `MoveCount`
+- default fallback: `Year DESC, Id`
 
-- `ApplicationUser.Email` unique index
-- `Player.NormalizedFullName` unique index
-- `Player.NormalizedFirstName`, `Player.NormalizedLastName` indexes
-- `Game` indexes on `(Year, Id)`, `MoveCount`, `GameHash`
-- `Position` indexes on `FenHash`, `(GameId, PlyCount)`
-- `UserDatabase` unique `(OwnerUserId, Name)`, plus `IsPublic` index
-- `UserDatabaseGame` composite PK `(UserDatabaseId, GameId)`
-- `StagingImportSession` indexes on `(OwnerUserId, CreatedAtUtc)` and `ExpiresAtUtc`
-- `StagingGame` indexes on owner/session/hash and owner/session/white+black names
-- `StagingPosition` indexes on `FenHash` and `(StagingGameId, PlyCount)`
+Move-tree sources:
 
-Relationship behavior examples:
+- user database positions (`Positions`)
+- staging session positions (`StagingPositions`)
 
-- `Move -> Game`: cascade delete
-- `UserDatabaseGame -> UserDatabase`: cascade delete
-- `UserDatabaseGame -> Game`: cascade delete
-- `Game -> Player` links use `DeleteBehavior.Restrict`
+Move aggregation:
 
-### 7.3 Engine Subsystem
+- groups by SAN of next ply move
+- computes counts of white wins, draws, black wins
+- limits by `MaxMoves`
+
+### 8.2 Draft Repositories
+
+`DraftImportRepository` (`backend/src/ChessXiv.Infrastructure/Repositories/DraftImportRepository.cs`):
+
+- load session by id+owner
+- count staging games for session+owner
+- delete unpromoted sessions by owner
+- add session and staging games
+
+`DraftPromotionRepository` (`backend/src/ChessXiv.Infrastructure/Repositories/DraftPromotionRepository.cs`):
+
+- load session
+- load target user database
+- fetch staging game pages with moves+positions eager loaded
+- find existing `UserDatabaseGame` links by `GameHash`
+- add main games and DB links
+- delete staging games by ID set
+- mark session promoted with `ExecuteUpdateAsync`
+
+### 8.3 Player/Game Repositories
+
+`PlayerRepository`:
+
+- get players by normalized full names
+- add missing players
+- search candidate IDs via SQL `LIKE` on normalized first/last names
+
+`GameRepository`:
+
+- add range of games
+
+## 9. Domain Model and Persistence
+
 Sources:
 
-- `backend/src/ChessXiv.Domain/Engine/Models/BoardState.cs`
-- `backend/src/ChessXiv.Domain/Engine/Serialization/FenBoardStateSerializer.cs`
-- `backend/src/ChessXiv.Domain/Engine/Services/BitboardBoardStateTransition.cs`
-- `backend/src/ChessXiv.Domain/Engine/Services/ZobristPositionHasher.cs`
-- `backend/src/ChessXiv.Domain/Engine/Hashing/ZobristTables.cs`
+- entities in `backend/src/ChessXiv.Domain/Entities`
+- mappings in `backend/src/ChessXiv.Infrastructure/Data/ChessXivDbContext.cs`
 
-Key mechanics:
+### 9.1 Core Entities
 
-- Board represented as 12 bitboards + occupancy bitboards.
-- FEN parser enforces six FEN fields and validates rank structure.
-- SAN move transition supports:
-  - standard moves
-  - captures
-  - castling
-  - promotions
-  - en-passant captures
-  - legality checks via king safety
-- Zobrist hash maintained incrementally on state transitions.
-- Hash includes piece-square, side-to-move, castling rights, and en-passant file.
+- `Game`: metadata, players, PGN, hash, move count, master flag
+- `Move`: per-move SAN and optional eval/clock for both sides
+- `Position`: per-ply FEN snapshot and hash
+- `Player`: normalized and display name fields
 
-Note on abstractions:
+### 9.2 User Database Entities
 
-- `IChessEngine` and `IMoveGenerator` interfaces exist in domain abstractions.
-- No concrete implementations are currently registered in DI.
+- `UserDatabase`: user-owned collection with visibility flag
+- `UserDatabaseGame`: many-to-many join with metadata snapshot at link time
+- `UserDatabaseBookmark`: user bookmark join to user databases
 
----
+### 9.3 Staging Entities
 
-## 8. Data Pipelines and Workflows
+- `StagingImportSession`: owner, created/expiry/promotion timestamps
+- `StagingGame`: draft game payload and hash
+- `StagingMove`: draft move rows
+- `StagingPosition`: draft position rows
 
-### 8.1 Pipeline A: Direct Import (`/api/pgn/import`)
+### 9.4 Identity Extension
 
-1. API validates PGN body.
-2. `PgnImportService` parses stream.
-3. Invalid player-name games are skipped.
-4. Batch persist path executes:
-   - set year/move count/hash
-   - resolve players
-   - compute positions
-   - add games and save
+- `ApplicationUser`: identity user + `CreatedAtUtc` + `UserTier`
 
-Output: `PgnImportResult` (`ParsedCount`, `ImportedCount`, `SkippedCount`).
+### 9.5 Key Constraints and Indexes
 
-### 8.2 Pipeline B: Draft Import (`/api/pgn/drafts/import`)
+Highlights from model config:
 
-1. Requires authenticated user.
-2. Create or fetch session (`StagingImportSession`).
-3. Parse PGN and map to staging rows.
-4. Compute and attach staging positions.
-5. Persist staging batch.
+- `Players.NormalizedFullName` unique
+- `Games.GameHash` indexed
+- `Games.Year, Id` indexed
+- `Games.MoveCount` indexed
+- `Positions.FenHash` indexed
+- `Positions.Fen` indexed
+- `Positions(GameId, PlyCount)` indexed
+- `UserDatabases(OwnerUserId, Name)` unique
+- `UserDatabaseGames` composite key `(UserDatabaseId, GameId)`
+- `UserDatabaseBookmarks` composite key `(UserId, UserDatabaseId)`
+- `UserDatabaseBookmarks(UserId, CreatedAtUtc)` indexed
+- `StagingGames` indexed by owner/session/hash and owner/session/player names
+- `StagingPositions.FenHash` indexed
+- `StagingPositions(StagingGameId, PlyCount)` indexed
+- `ApplicationUser.Email` unique
 
-Output: `DraftImportResult` including `ImportSessionId` and expiration timestamp.
+### 9.6 Deletion Behavior
 
-### 8.3 Pipeline C: Draft Promote (`/api/pgn/drafts/{id}/promote`)
+- user delete cascades to user databases and related joins/bookmarks
+- user database delete cascades to `UserDatabaseGames` and `UserDatabaseBookmarks`
+- game delete cascades to `Moves`, `Positions`, and `UserDatabaseGames` links
+- staging session delete cascades to staging games/moves/positions
 
-1. Requires authenticated user and target `UserDatabaseId`.
-2. Validate session ownership and state.
-3. Read staging games in pages.
-4. Detect duplicates by `GameHash` in target DB.
-5. Apply duplicate handling mode:
-   - `KeepExisting`
-   - `OverrideMetadata`
-6. Insert non-duplicates into main tables and join table.
-7. Delete processed staging rows.
-8. Mark session as promoted.
+## 10. Chess Engine Subsystem
 
-Output: `DraftPromotionResult` with promoted/duplicate/overridden/skipped counts.
+Folder: `backend/src/ChessXiv.Domain/Engine`
 
-### 8.4 Pipeline D: Explorer Search (`/api/games/explorer/search`)
+Key components:
 
-1. Normalize player search terms.
-2. Resolve player IDs through `PlayerRepository.SearchIdsAsync`.
-3. Apply scalar filters (ELO, year, ECO, result, move count).
-4. Optional position filter:
-   - `Exact`: FEN hash + exact FEN match
-   - `Subset`: piece placement match against FEN prefix
-5. Apply sorting and pagination.
-6. Return `PagedResult<GameExplorerItemDto>`.
+- `FenBoardStateSerializer`: strict 6-field FEN parse/serialize, occupancy recompute
+- `BitboardBoardStateTransition`: SAN application with legality checks
+- `ZobristPositionHasher`: deterministic hash from board state
+- `BoardStateFactory`: initial board construction
+- engine model/types: `BoardState`, `Bitboard`, `Square`, `Piece`, `PieceType`, `Color`, `CastlingRights`
 
-### 8.5 Pipeline E: Move Tree (`/api/games/explorer/move-tree`)
+Supported transition capabilities include:
 
-1. Requires authenticated user and FEN.
-2. Parse FEN + compute hash.
-3. Route by source:
-   - `UserDatabase`: validate owner access and aggregate moves from main positions
-   - `StagingSession`: validate owner access and aggregate from staging positions
-4. Aggregate counts by `LastMove` and game result.
-5. Service computes percentages.
+- standard SAN piece and pawn moves
+- captures and disambiguation
+- castling (`O-O`, `O-O-O`, `0-0`, `0-0-0`)
+- promotions (`=N`, `=B`, `=R`, default queen)
+- en passant handling
+- legality filtering by king safety (`IsKingInCheck` simulation)
+- Zobrist key updates for piece placement, side-to-move, castling rights, and en-passant file
 
-Output: `MoveTreeResponse`.
+## 11. Data and Workflow Lifecycles
 
----
+### 11.1 Standard Import
 
-## 9. Persistence and Migration History
+1. API receives PGN string.
+2. Parser emits `Game` stream.
+3. Invalid games (missing white/black) skipped.
+4. Hash + players + position chain computed.
+5. Batch persisted to main tables.
 
-### 9.1 Database Graph (ERD)
+### 11.2 Draft Import
 
-Provided schema graph:
+1. User imports to staging session.
+2. Service validates ownership/session and quota.
+3. Staging tables receive games, moves, positions.
+4. Session can be incrementally appended using `importSessionId`.
 
-![ChessXiv database graph](./database-schema.png)
+### 11.3 Promotion
 
-Migration files under `backend/src/ChessXiv.Infrastructure/Migrations` show schema evolution timeline:
+1. User selects target `UserDatabase`.
+2. Staging page loaded.
+3. Duplicate detection by `GameHash` against target DB links.
+4. Non-duplicates promoted to main `Games` + `UserDatabaseGames`.
+5. Duplicates either skipped or metadata-overridden.
+6. Staging rows removed.
+7. Session marked promoted.
 
-1. `20260302214248_InitialCreate`
-2. `20260303125815_AddMovesTableFinal`
-3. `20260305204807_AddPositionTable`
-4. `20260310115302_AddIsMasterFlag`
-5. `20260312101909_AddPlayersYearMoveCountExplorer`
-6. `20260312102243_AddPlayerTable`
-7. `20260318120841_AddIdentityAndUserDatabases`
-8. `20260318185037_AddStagingArea`
+### 11.4 Explorer
 
-Snapshot file:
+1. Query scope built from public and/or owned databases.
+2. Name filters resolve player ID sets.
+3. Scalar and position filters applied.
+4. Sorted page projected into lightweight DTO.
+5. Move-tree query aggregates next SAN moves and result distribution.
 
-- `backend/src/ChessXiv.Infrastructure/Migrations/ChessXivDbContextModelSnapshot.cs`
-
-Design-time EF factory:
-
-- `backend/src/ChessXiv.Infrastructure/Data/ChessXivDesignTimeDbContextFactory.cs`
-
-Factory behavior:
+## 12. Migrations
 
-- Resolves `src/ChessXiv.Api` to load appsettings.
-- Reads connection string from `ConnectionStrings:DefaultConnection` or `CHESSXIV_CONNECTION_STRING`.
-- Throws explicit error when unresolved.
+Location: `backend/src/ChessXiv.Infrastructure/Migrations`
 
----
+Recent migration timeline includes:
 
-## 10. Configuration and Operations
+- `20260318120841_AddIdentityAndUserDatabases`
+- `20260318185037_AddStagingArea`
+- `20260323111724_AddUserDatabaseBookmarks`
+- `20260323173714_AddUserTierAndPositionFenIndex`
 
-### 10.1 Config Files
+Model snapshot: `ChessXivDbContextModelSnapshot.cs`
 
-- `backend/src/ChessXiv.Api/appsettings.json`
-- `backend/src/ChessXiv.Api/appsettings.Example.json`
-- `docker-compose.yml` (project root)
-
-### 10.2 Docker Database Service
-From `docker-compose.yml`:
-
-- Postgres container: `postgres:latest`
-- Container name: `chessxiv_db_container`
-- Env-based credentials:
-  - `CHESSXIV_DB_USER`
-  - `CHESSXIV_DB_PASSWORD`
-  - `CHESSXIV_DB_NAME`
-  - `CHESSXIV_DB_PORT` (optional, default 5432)
-- Named volume: `postgres_data`
-
-### 10.3 Typical Backend Runbook
-
-1. Start database:
-   - `docker-compose up -d`
-2. Restore/build:
-   - `cd backend`
-   - `dotnet build`
-3. Apply migrations:
-   - `dotnet ef database update --project src/ChessXiv.Infrastructure --startup-project src/ChessXiv.Api`
-4. Run API:
-   - `dotnet run --project src/ChessXiv.Api/ChessXiv.Api.csproj`
-
-### 10.4 CLI Import Runbook
-Source: `backend/src/ChessXiv.Cli/Program.cs`
-
-Behavior:
+## 13. Testing Strategy
 
-- Builds a host and DI similar to import subset of API stack.
-- Loads user secrets for connection string.
-- Accepts PGN path from:
-  - first CLI arg
-  - `CHESSXIV_PGN_PATH`
-  - fallback `backend/tests/TestData/games_sample.pgn`
-- Imports with `markAsMaster: true`.
+### 13.1 Unit Tests
 
-Run example:
+Location: `backend/tests/ChessXiv.UnitTests`
 
-- `dotnet run --project src/ChessXiv.Cli/ChessXiv.Cli.csproj -- /absolute/path/to/file.pgn`
+Coverage includes:
 
----
+- PGN parsing tags/moves and parser edge cases
+- SAN transition legality and board state transitions
+- FEN serialization
+- game hashing and player name normalization
+- import/promotion service behavior and mappings
+- game explorer service logic
+- JWT token service
+- auth controller behavior
 
-## 11. DTO and Contract Catalog
-Source folder: `backend/src/ChessXiv.Application/Contracts`
+### 13.2 Integration Tests
 
-Request models:
+Location: `backend/tests/ChessXiv.IntegrationTests`
 
-- `AuthRegisterRequest`
-- `AuthLoginRequest`
-- `ForgotPasswordRequest`
-- `ResetPasswordRequest`
-- `PgnImportRequest`
-- `DraftImportRequest`
-- `DraftPromotionRequest`
-- `GameExplorerSearchRequest`
-- `MoveTreeRequest`
-- `CreateUserDatabaseRequest`
-- `UpdateUserDatabaseRequest`
-- `AddGamesToDatabaseRequest`
+Uses PostgreSQL Testcontainers (`postgres:16-alpine`) via `PostgresTestFixture`.
 
-Response models:
+Coverage includes:
 
-- `AuthTokenResponse`
-- `PgnImportResult`
-- `DraftImportResult`
-- `DraftPromotionResult`
-- `PagedResult<T>`
-- `GameExplorerItemDto`
-- `MoveTreeResponse`
-- `MoveTreeMoveDto`
-- `UserDatabaseDto`
-
-Enums and option contracts:
-
-- `DuplicateHandlingMode`
-- `EloFilterMode`
-- `GameExplorerSortBy`
-- `MoveTreeSource`
-- `PositionSearchMode`
-- `SortDirection`
-
----
-
-## 12. Testing Strategy and Coverage Map
-
-### 12.1 Unit Tests (`backend/tests/ChessXiv.UnitTests`)
-
-Test files:
-
-- `AuthControllerTests.cs`
-- `BitboardBoardStateTransitionTests.cs`
-- `DraftImportServiceMappingTests.cs`
-- `DraftPromotionServiceTests.cs`
-- `FenBoardStateSerializerTests.cs`
-- `GameExplorerServiceTests.cs`
-- `GameHashCalculatorTests.cs`
-- `JwtTokenServiceTests.cs`
-- `PgnImportServiceTests.cs`
-- `PgnService.MoveTests.cs`
-- `PgnService.TagTests.cs`
-- `PgnServiceTestData.cs`
-- `PlayerNameNormalizerTests.cs`
-- `PositionImportCoordinatorTests.cs`
-
-Coverage intent:
-
-- Controller behavior and auth handling
-- PGN parsing and metadata extraction
-- Name normalization and hash stability
-- Position serialization/hash/transition correctness
-- Draft import/promote mapping rules and duplicate strategy
-- Explorer search/move-tree orchestration
-
-### 12.2 Integration Tests (`backend/tests/ChessXiv.IntegrationTests`)
-
-Test files:
-
-- `PgnImportControllerApiTests.cs`
-- `PgnImportPersistenceTests.cs`
-- `DraftPromotionIntegrationTests.cs`
-- `UserDatabaseIntegrationTests.cs`
-
-Infrastructure files:
-
-- `Infrastructure/PostgresCollection.cs`
-- `Infrastructure/PostgresTestFixture.cs`
-
-Coverage intent:
-
-- HTTP controller behavior including global exception output
-- End-to-end DB persistence for import and positions
-- Draft promotion transaction semantics and rollback behavior
-- User ownership consistency and cascade behavior
-- Real PostgreSQL container lifecycle and DB reset process
-
----
-
-## 13. Current Constraints and Decisions
-
-Based on implementation currently present:
-
-1. Email dispatch is intentionally logger-based (`LoggingEmailSender`) for early-stage development and local testing.
-2. `IChessEngine` and `IMoveGenerator` abstractions are intentionally present for future engine features and are not required for the current explorer pipeline.
-3. Position search exact mode uses hash + exact FEN comparison in repository queries, reducing hash-collision risk in practical query paths.
-4. `appsettings.json` is treated as a local machine file in this workflow; production secrets should still remain in secure secret stores and not in tracked config.
-
----
-
-## 14. Full Backend Source Component Index
-
-The list below captures backend source/config/test files (excluding regular `bin/` and `obj/` folders; Windows-style `bin\Debug` paths may still appear in workspace and should be treated as generated artifacts):
-
-### 14.1 API
-
-- `backend/src/ChessXiv.Api/Authentication/IJwtTokenService.cs`
-- `backend/src/ChessXiv.Api/Authentication/JwtOptions.cs`
-- `backend/src/ChessXiv.Api/Authentication/JwtTokenService.cs`
-- `backend/src/ChessXiv.Api/Controllers/AuthController.cs`
-- `backend/src/ChessXiv.Api/Controllers/GameExplorerController.cs`
-- `backend/src/ChessXiv.Api/Controllers/PgnImportController.cs`
-- `backend/src/ChessXiv.Api/Controllers/UserDatabasesController.cs`
-- `backend/src/ChessXiv.Api/Email/IEmailSender.cs`
-- `backend/src/ChessXiv.Api/Email/LoggingEmailSender.cs`
-- `backend/src/ChessXiv.Api/Program.cs`
-- `backend/src/ChessXiv.Api/Properties/launchSettings.json`
-- `backend/src/ChessXiv.Api/appsettings.Example.json`
-- `backend/src/ChessXiv.Api/appsettings.json`
-- `backend/src/ChessXiv.Api/ChessXiv.Api.csproj`
-
-### 14.2 Application
-
-- `backend/src/ChessXiv.Application/Abstractions/IDraftImportService.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IDraftPromotionService.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IGameExplorerService.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IPgnImportService.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IPgnParser.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IPositionImportCoordinator.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IUnitOfWork.cs`
-- `backend/src/ChessXiv.Application/Abstractions/IUnitOfWorkTransaction.cs`
-- `backend/src/ChessXiv.Application/Abstractions/Repositories/IDraftImportRepository.cs`
-- `backend/src/ChessXiv.Application/Abstractions/Repositories/IDraftPromotionRepository.cs`
-- `backend/src/ChessXiv.Application/Abstractions/Repositories/IGameExplorerRepository.cs`
-- `backend/src/ChessXiv.Application/Abstractions/Repositories/IGameRepository.cs`
-- `backend/src/ChessXiv.Application/Abstractions/Repositories/IPlayerRepository.cs`
-- `backend/src/ChessXiv.Application/Contracts/AddGamesToDatabaseRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/AuthLoginRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/AuthRegisterRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/AuthTokenResponse.cs`
-- `backend/src/ChessXiv.Application/Contracts/CreateUserDatabaseRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/DraftImportRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/DraftImportResult.cs`
-- `backend/src/ChessXiv.Application/Contracts/DraftPromotionRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/DraftPromotionResult.cs`
-- `backend/src/ChessXiv.Application/Contracts/DuplicateHandlingMode.cs`
-- `backend/src/ChessXiv.Application/Contracts/EloFilterMode.cs`
-- `backend/src/ChessXiv.Application/Contracts/ForgotPasswordRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/GameExplorerItemDto.cs`
-- `backend/src/ChessXiv.Application/Contracts/GameExplorerSearchRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/GameExplorerSortBy.cs`
-- `backend/src/ChessXiv.Application/Contracts/MoveTreeMoveDto.cs`
-- `backend/src/ChessXiv.Application/Contracts/MoveTreeRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/MoveTreeResponse.cs`
-- `backend/src/ChessXiv.Application/Contracts/MoveTreeSource.cs`
-- `backend/src/ChessXiv.Application/Contracts/PagedResult.cs`
-- `backend/src/ChessXiv.Application/Contracts/PgnImportRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/PgnImportResult.cs`
-- `backend/src/ChessXiv.Application/Contracts/PositionSearchMode.cs`
-- `backend/src/ChessXiv.Application/Contracts/ResetPasswordRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/SortDirection.cs`
-- `backend/src/ChessXiv.Application/Contracts/UpdateUserDatabaseRequest.cs`
-- `backend/src/ChessXiv.Application/Contracts/UserDatabaseDto.cs`
-- `backend/src/ChessXiv.Application/Services/DraftImportService.cs`
-- `backend/src/ChessXiv.Application/Services/DraftPromotionService.cs`
-- `backend/src/ChessXiv.Application/Services/GameExplorerService.cs`
-- `backend/src/ChessXiv.Application/Services/GameHashCalculator.cs`
-- `backend/src/ChessXiv.Application/Services/PgnImportService.cs`
-- `backend/src/ChessXiv.Application/Services/PgnService.cs`
-- `backend/src/ChessXiv.Application/Services/PlayerNameNormalizer.cs`
-- `backend/src/ChessXiv.Application/Services/PositionImportCoordinator.cs`
-- `backend/src/ChessXiv.Application/ChessXiv.Application.csproj`
-
-### 14.3 Domain
-
-- `backend/src/ChessXiv.Domain/Engine/Abstractions/IBoardStateFactory.cs`
-- `backend/src/ChessXiv.Domain/Engine/Abstractions/IBoardStateSerializer.cs`
-- `backend/src/ChessXiv.Domain/Engine/Abstractions/IBoardStateTransition.cs`
-- `backend/src/ChessXiv.Domain/Engine/Abstractions/IChessEngine.cs`
-- `backend/src/ChessXiv.Domain/Engine/Abstractions/IMoveGenerator.cs`
-- `backend/src/ChessXiv.Domain/Engine/Abstractions/IPositionHasher.cs`
-- `backend/src/ChessXiv.Domain/Engine/Factories/BoardStateFactory.cs`
-- `backend/src/ChessXiv.Domain/Engine/Hashing/ZobristTables.cs`
-- `backend/src/ChessXiv.Domain/Engine/Models/BoardState.cs`
-- `backend/src/ChessXiv.Domain/Engine/Models/EngineMove.cs`
-- `backend/src/ChessXiv.Domain/Engine/Serialization/FenBoardStateSerializer.cs`
-- `backend/src/ChessXiv.Domain/Engine/Services/BitboardBoardStateTransition.cs`
-- `backend/src/ChessXiv.Domain/Engine/Services/ZobristPositionHasher.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/Bitboard.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/CastlingRights.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/Color.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/MoveType.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/Piece.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/PieceType.cs`
-- `backend/src/ChessXiv.Domain/Engine/Types/Square.cs`
-- `backend/src/ChessXiv.Domain/Entities/Game.cs`
-- `backend/src/ChessXiv.Domain/Entities/Move.cs`
-- `backend/src/ChessXiv.Domain/Entities/Player.cs`
-- `backend/src/ChessXiv.Domain/Entities/Position.cs`
-- `backend/src/ChessXiv.Domain/Entities/StagingGame.cs`
-- `backend/src/ChessXiv.Domain/Entities/StagingImportSession.cs`
-- `backend/src/ChessXiv.Domain/Entities/StagingMove.cs`
-- `backend/src/ChessXiv.Domain/Entities/StagingPosition.cs`
-- `backend/src/ChessXiv.Domain/Entities/UserDatabase.cs`
-- `backend/src/ChessXiv.Domain/Entities/UserDatabaseGame.cs`
-- `backend/src/ChessXiv.Domain/ChessXiv.Domain.csproj`
-
-### 14.4 Infrastructure
-
-- `backend/src/ChessXiv.Infrastructure/Data/ApplicationUser.cs`
-- `backend/src/ChessXiv.Infrastructure/Data/ChessXivDbContext.cs`
-- `backend/src/ChessXiv.Infrastructure/Data/ChessXivDesignTimeDbContextFactory.cs`
-- `backend/src/ChessXiv.Infrastructure/Data/EfUnitOfWork.cs`
-- `backend/src/ChessXiv.Infrastructure/Data/EfUnitOfWorkTransaction.cs`
-- `backend/src/ChessXiv.Infrastructure/Repositories/DraftImportRepository.cs`
-- `backend/src/ChessXiv.Infrastructure/Repositories/DraftPromotionRepository.cs`
-- `backend/src/ChessXiv.Infrastructure/Repositories/GameExplorerRepository.cs`
-- `backend/src/ChessXiv.Infrastructure/Repositories/GameRepository.cs`
-- `backend/src/ChessXiv.Infrastructure/Repositories/PlayerRepository.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260302214248_InitialCreate.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260303125815_AddMovesTableFinal.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260305204807_AddPositionTable.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260310115302_AddIsMasterFlag.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260312101909_AddPlayersYearMoveCountExplorer.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260312102243_AddPlayerTable.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260318120841_AddIdentityAndUserDatabases.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/20260318185037_AddStagingArea.cs`
-- `backend/src/ChessXiv.Infrastructure/Migrations/ChessXivDbContextModelSnapshot.cs`
-- `backend/src/ChessXiv.Infrastructure/ChessXiv.Infrastructure.csproj`
-
-### 14.5 CLI and Tests
-
-- `backend/src/ChessXiv.Cli/Program.cs`
-- `backend/src/ChessXiv.Cli/ChessXiv.Cli.csproj`
-- `backend/tests/ChessXiv.UnitTests/AuthControllerTests.cs`
-- `backend/tests/ChessXiv.UnitTests/BitboardBoardStateTransitionTests.cs`
-- `backend/tests/ChessXiv.UnitTests/DraftImportServiceMappingTests.cs`
-- `backend/tests/ChessXiv.UnitTests/DraftPromotionServiceTests.cs`
-- `backend/tests/ChessXiv.UnitTests/FenBoardStateSerializerTests.cs`
-- `backend/tests/ChessXiv.UnitTests/GameExplorerServiceTests.cs`
-- `backend/tests/ChessXiv.UnitTests/GameHashCalculatorTests.cs`
-- `backend/tests/ChessXiv.UnitTests/JwtTokenServiceTests.cs`
-- `backend/tests/ChessXiv.UnitTests/PgnImportServiceTests.cs`
-- `backend/tests/ChessXiv.UnitTests/PgnService.MoveTests.cs`
-- `backend/tests/ChessXiv.UnitTests/PgnService.TagTests.cs`
-- `backend/tests/ChessXiv.UnitTests/PgnServiceTestData.cs`
-- `backend/tests/ChessXiv.UnitTests/PlayerNameNormalizerTests.cs`
-- `backend/tests/ChessXiv.UnitTests/PositionImportCoordinatorTests.cs`
-- `backend/tests/ChessXiv.UnitTests/ChessXiv.UnitTests.csproj`
-- `backend/tests/ChessXiv.IntegrationTests/PgnImportControllerApiTests.cs`
-- `backend/tests/ChessXiv.IntegrationTests/PgnImportPersistenceTests.cs`
-- `backend/tests/ChessXiv.IntegrationTests/DraftPromotionIntegrationTests.cs`
-- `backend/tests/ChessXiv.IntegrationTests/UserDatabaseIntegrationTests.cs`
-- `backend/tests/ChessXiv.IntegrationTests/Infrastructure/PostgresCollection.cs`
-- `backend/tests/ChessXiv.IntegrationTests/Infrastructure/PostgresTestFixture.cs`
-- `backend/tests/ChessXiv.IntegrationTests/ChessXiv.IntegrationTests.csproj`
-
----
-
-## 15. Maintenance Notes
-
-When updating this backend, keep this document aligned with changes to:
-
-- DI wiring in `Program.cs`
-- contract DTOs and controller routes
-- migration additions and schema/index updates
-- database graph image in `docs/database-schema.png`
-- import, promotion, and explorer behavior
-- authentication/authorization claims logic
-- test suite additions
+- PGN import API contract behavior and 500 problem-details handling
+- persistence of imported games/moves/positions
+- draft promotion happy-path, duplicate handling modes, transactional rollback
+- user database ownership, many-to-many linking, cascade integrity
+- user tier quota behavior (`Free`, `Premium`, guest default)
+- bookmark uniqueness and cascading behavior

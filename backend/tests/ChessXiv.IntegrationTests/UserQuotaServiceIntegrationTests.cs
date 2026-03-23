@@ -8,7 +8,7 @@ namespace ChessXiv.IntegrationTests;
 public class UserQuotaServiceIntegrationTests(PostgresTestFixture fixture)
 {
     [Fact]
-    public async Task GetMaxDraftImportGamesAsync_ReturnsPremiumLimit_ForPremiumTier()
+    public async Task GetMaxDraftImportGamesAsync_ReturnsUnlimited_ForPremiumTier()
     {
         await fixture.ResetDatabaseAsync();
 
@@ -25,7 +25,7 @@ public class UserQuotaServiceIntegrationTests(PostgresTestFixture fixture)
         var service = new UserQuotaService(dbContext);
         var max = await service.GetMaxDraftImportGamesAsync("premium-user");
 
-        Assert.Equal(500_000, max);
+        Assert.Equal(int.MaxValue, max);
     }
 
     [Fact]
@@ -59,6 +59,6 @@ public class UserQuotaServiceIntegrationTests(PostgresTestFixture fixture)
 
         var max = await service.GetMaxDraftImportGamesAsync(null);
 
-        Assert.Equal(50_000, max);
+        Assert.Equal(200_000, max);
     }
 }

@@ -6,9 +6,9 @@ namespace ChessXiv.Infrastructure.Services;
 
 public sealed class UserQuotaService(ChessXivDbContext dbContext) : IQuotaService
 {
-    private const int GuestDraftImportMaxGames = 50_000;
     private const int FreeDraftImportMaxGames = 200_000;
-    private const int PremiumDraftImportMaxGames = 500_000;
+    private const int GuestDraftImportMaxGames = FreeDraftImportMaxGames;
+    private const int PremiumDraftImportMaxGames = int.MaxValue;
 
     public async Task<int> GetMaxDraftImportGamesAsync(string? ownerUserId, CancellationToken cancellationToken = default)
     {
