@@ -12,20 +12,23 @@ import { AuthStateService } from '../../../core/auth/auth-state.service';
   styleUrl: './login-modal.scss',
 })
 export class LoginModal implements OnInit {
+  private static readonly verifyEmailMessage = 'Please confirm your email address before signing in.';
+
   private readonly authState = inject(AuthStateService);
   private readonly fb = inject(FormBuilder);
 
   @Output() close = new EventEmitter<void>();
   @Output() authenticated = new EventEmitter<void>();
-  @Input() initialMode: 'login' | 'register' | 'forgot' | 'reset' = 'login';
+  @Input() initialMode: 'login' | 'register' | 'forgot' | 'reset' | 'verify-email' = 'login';
   @Input() resetEmail = '';
   @Input() resetToken = '';
   @Input() showCloseButton = true;
 
-  protected readonly mode = signal<'login' | 'register' | 'forgot' | 'reset'>('login');
+  protected readonly mode = signal<'login' | 'register' | 'forgot' | 'reset' | 'verify-email'>('login');
   protected readonly isSubmitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly infoMessage = signal<string | null>(null);
+  protected readonly pendingConfirmationIdentifier = signal('');
 
   protected readonly loginForm = this.fb.nonNullable.group({
     username: ['', [Validators.required]],
@@ -68,7 +71,7 @@ export class LoginModal implements OnInit {
     this.close.emit();
   }
 
-  protected switchMode(nextMode: 'login' | 'register' | 'forgot' | 'reset'): void {
+  protected switchMode(nextMode: 'login' | 'register' | 'forgot' | 'reset' | 'verify-email'): void {
     this.mode.set(nextMode);
     this.errorMessage.set(null);
     this.infoMessage.set(null);
@@ -93,6 +96,14 @@ export class LoginModal implements OnInit {
           this.authenticated.emit();
         },
         error: (error) => {
+          const errorCode = this.extractErrorCode(error);
+          if (errorCode === 'EMAIL_NOT_CONFIRMED') {
+            this.pendingConfirmationIdentifier.set(this.extractPendingIdentifier(error) || raw.username.trim());
+            this.switchMode('verify-email');
+            this.infoMessage.set(LoginModal.verifyEmailMessage);
+            return;
+          }
+
           this.errorMessage.set(this.extractErrorMessage(error, 'Unable to sign in.'));
         }
       });
@@ -119,7 +130,14 @@ export class LoginModal implements OnInit {
     })
       .pipe(finalize(() => this.isSubmitting.set(false)))
       .subscribe({
-        next: () => {
+        next: (response) => {
+          if (response.requiresEmailConfirmation) {
+            this.pendingConfirmationIdentifier.set(response.email || raw.email.trim());
+            this.switchMode('verify-email');
+            this.infoMessage.set(LoginModal.verifyEmailMessage);
+            return;
+          }
+
           this.authenticated.emit();
         },
         error: (error) => {
@@ -142,8 +160,8 @@ export class LoginModal implements OnInit {
     })
       .pipe(finalize(() => this.isSubmitting.set(false)))
       .subscribe({
-        next: (message) => {
-          this.infoMessage.set(message);
+        next: () => {
+          this.infoMessage.set(LoginModal.verifyEmailMessage);
           this.errorMessage.set(null);
         },
         error: (error) => {
@@ -191,6 +209,29 @@ export class LoginModal implements OnInit {
     if (currentLogin.includes('@')) {
       this.forgotForm.patchValue({ email: currentLogin });
     }
+  }
+
+  protected resendConfirmationEmail(): void {
+    const identifier = this.pendingConfirmationIdentifier().trim();
+    if (!identifier) {
+      this.errorMessage.set('Missing email or username for resending confirmation.');
+      return;
+    }
+
+    this.startSubmitting();
+    this.authState.resendConfirmation({
+      usernameOrEmail: identifier
+    })
+      .pipe(finalize(() => this.isSubmitting.set(false)))
+      .subscribe({
+        next: () => {
+          this.infoMessage.set(LoginModal.verifyEmailMessage);
+          this.errorMessage.set(null);
+        },
+        error: (error) => {
+          this.errorMessage.set(this.extractErrorMessage(error, 'Unable to resend confirmation email.'));
+        }
+      });
   }
 
   protected shouldShowRegisterEmailError(): boolean {
@@ -242,5 +283,37 @@ export class LoginModal implements OnInit {
     }
 
     return fallback;
+  }
+
+  private extractErrorCode(error: unknown): string | null {
+    if (typeof error !== 'object' || error === null || !('error' in error)) {
+      return null;
+    }
+
+    const payload = (error as { error: unknown }).error;
+    if (typeof payload === 'object' && payload !== null && 'code' in payload) {
+      const code = (payload as { code?: unknown }).code;
+      if (typeof code === 'string' && code.trim().length > 0) {
+        return code;
+      }
+    }
+
+    return null;
+  }
+
+  private extractPendingIdentifier(error: unknown): string | null {
+    if (typeof error !== 'object' || error === null || !('error' in error)) {
+      return null;
+    }
+
+    const payload = (error as { error: unknown }).error;
+    if (typeof payload === 'object' && payload !== null && 'email' in payload) {
+      const email = (payload as { email?: unknown }).email;
+      if (typeof email === 'string' && email.trim().length > 0) {
+        return email;
+      }
+    }
+
+    return null;
   }
 }

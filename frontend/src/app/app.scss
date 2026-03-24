@@ -16,3 +16,52 @@
   height: 100%;
   overflow-y: auto;
 }
+
+.confirm-email-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.18), transparent 45%), #f8fafc;
+}
+
+.confirm-email-card {
+  max-width: 460px;
+  width: 100%;
+  border-radius: 16px;
+  padding: 28px;
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+
+  h1 {
+    margin: 0 0 10px;
+    font-size: 24px;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.45;
+  }
+
+  &.success {
+    border-color: #86efac;
+  }
+
+  &.error {
+    border-color: #fecaca;
+  }
+}
+
+.confirm-action {
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}

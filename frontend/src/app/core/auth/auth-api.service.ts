@@ -2,10 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  AuthRegisterResponse,
   AuthLoginRequest,
   AuthRegisterRequest,
   AuthTokenResponse,
+  ConfirmEmailRequest,
   ForgotPasswordRequest,
+  ResendEmailConfirmationRequest,
   ResetPasswordRequest
 } from './auth.models';
 
@@ -14,8 +17,8 @@ export class AuthApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = this.resolveBaseUrl();
 
-  register(request: AuthRegisterRequest): Observable<AuthTokenResponse> {
-    return this.http.post<AuthTokenResponse>(`${this.baseUrl}/auth/register`, request);
+  register(request: AuthRegisterRequest): Observable<AuthRegisterResponse> {
+    return this.http.post<AuthRegisterResponse>(`${this.baseUrl}/auth/register`, request);
   }
 
   login(request: AuthLoginRequest): Observable<AuthTokenResponse> {
@@ -32,6 +35,16 @@ export class AuthApiService {
     return this.http.post(`${this.baseUrl}/auth/reset-password`, request, {
       responseType: 'text'
     });
+  }
+
+  resendConfirmation(request: ResendEmailConfirmationRequest): Observable<string> {
+    return this.http.post(`${this.baseUrl}/auth/resend-confirmation`, request, {
+      responseType: 'text'
+    });
+  }
+
+  confirmEmail(request: ConfirmEmailRequest): Observable<AuthTokenResponse> {
+    return this.http.post<AuthTokenResponse>(`${this.baseUrl}/auth/confirm-email`, request);
   }
 
   private resolveBaseUrl(): string {

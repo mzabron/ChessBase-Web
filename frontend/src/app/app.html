@@ -1,4 +1,4 @@
-<main *ngIf="!isResetPasswordView" class="app-layout">
+<main *ngIf="!isResetPasswordView && !isConfirmEmailView" class="app-layout">
   <div class="content-area">
     <app-explorer-page [isFocusMode]="isFocusMode" />
   </div>
@@ -10,6 +10,16 @@
     (toggleLayout)="toggleFocusMode()"
     (aboutClick)="toggleAboutModal()" />
 </main>
+
+<section *ngIf="isConfirmEmailView" class="confirm-email-view" aria-live="polite">
+  <div class="confirm-email-card" [class.error]="confirmStatus === 'error'" [class.success]="confirmStatus === 'success'">
+    <h1>Email confirmation</h1>
+    <p>{{ confirmMessage }}</p>
+    <button *ngIf="confirmStatus !== 'pending'" type="button" class="confirm-action" (click)="openLoginFromConfirmation()">
+      Go to sign in
+    </button>
+  </div>
+</section>
 
 <app-login-modal
   *ngIf="isLoginModalOpen"

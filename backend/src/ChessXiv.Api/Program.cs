@@ -2,6 +2,7 @@ using System.Text;
 using ChessXiv.Api;
 using ChessXiv.Api.Authentication;
 using ChessXiv.Api.Email;
+using ChessXiv.Api.Services;
 using ChessXiv.Application.Abstractions;
 using ChessXiv.Application.Abstractions.Repositories;
 using ChessXiv.Application.Services;
@@ -152,6 +153,7 @@ builder.Services.AddScoped<IEmailSender>(serviceProvider =>
 
     return serviceProvider.GetRequiredService<LoggingEmailSender>();
 });
+builder.Services.AddHostedService<UnconfirmedUserCleanupService>();
 
 var app = builder.Build();
 

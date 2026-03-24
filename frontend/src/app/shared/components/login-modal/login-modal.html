@@ -1,12 +1,12 @@
 <div class="modal-overlay">
-  <div class="modal-container" (click)="$event.stopPropagation()">
+  <div class="modal-container" [class.has-close-button]="showCloseButton" (click)="$event.stopPropagation()">
     <button *ngIf="showCloseButton" class="close-btn" (click)="onClose()" title="Close">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
     </button>
     
-    @if (showCloseButton) {
+    @if (showCloseButton && mode() !== 'verify-email') {
       <div class="mode-switch">
-        <button type="button" class="mode-btn" [class.active]="mode() === 'login' || mode() === 'forgot'" (click)="switchMode('login')">Sign in</button>
+        <button type="button" class="mode-btn" [class.active]="mode() === 'login' || mode() === 'forgot' || mode() === 'verify-email'" (click)="switchMode('login')">Sign in</button>
         <button type="button" class="mode-btn" [class.active]="mode() === 'register'" (click)="switchMode('register')">Register</button>
       </div>
     }
@@ -16,7 +16,7 @@
     }
 
     @if (infoMessage()) {
-      <p class="feedback info">{{ infoMessage() }}</p>
+      <p class="feedback info" [class.confirmation-info]="mode() === 'verify-email'">{{ infoMessage() }}</p>
     }
 
     @if (mode() === 'login') {
@@ -76,6 +76,17 @@
         <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Sending...' : 'Send reset link' }}</button>
         <button *ngIf="showCloseButton" type="button" class="forgot-link" (click)="switchMode('login')">Back to sign in</button>
       </form>
+    }
+
+    @if (mode() === 'verify-email') {
+      <div class="verify-email-block">
+        <h3>Confirm your email</h3>
+        <p>We sent a confirmation link to <strong>{{ pendingConfirmationIdentifier() }}</strong>.</p>
+        <p>Please confirm your account to continue. You can close this dialog, but you will stay signed out until confirmation is complete.</p>
+        <button type="button" class="btn-primary" [disabled]="isSubmitting()" (click)="resendConfirmationEmail()">
+          {{ isSubmitting() ? 'Resending...' : 'Resend confirmation email' }}
+        </button>
+      </div>
     }
 
     @if (mode() === 'reset') {

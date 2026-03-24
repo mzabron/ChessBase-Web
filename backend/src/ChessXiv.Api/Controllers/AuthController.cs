@@ -22,7 +22,7 @@ public class AuthController(
     private readonly FrontendOptions _frontendOptions = frontendOptions.Value;
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] AuthRegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] AuthRegisterRequest request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
@@ -45,8 +45,12 @@ public class AuthController(
             });
         }
 
-        var token = jwtTokenService.CreateToken(user);
-        return Ok(token);
+        await SendEmailConfirmationAsync(user, cancellationToken);
+
+        return Accepted(new AuthRegisterResponse(
+            RequiresEmailConfirmation: true,
+            Email: user.Email ?? request.Email.Trim(),
+            Message: "Registration created. Please confirm your email to sign in."));
     }
 
     [HttpPost("login")]
@@ -72,8 +76,81 @@ public class AuthController(
             return Unauthorized("Invalid credentials.");
         }
 
+        if (!user.EmailConfirmed)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                Code = "EMAIL_NOT_CONFIRMED",
+                Message = "Email confirmation is required before signing in.",
+                Email = user.Email
+            });
+        }
+
         var token = jwtTokenService.CreateToken(user);
         return Ok(token);
+    }
+
+    [HttpPost("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.Token))
+        {
+            return BadRequest("User id and token are required.");
+        }
+
+        var user = await userManager.FindByIdAsync(request.UserId.Trim());
+        if (user is null)
+        {
+            return BadRequest("Invalid email confirmation request.");
+        }
+
+        if (user.EmailConfirmed)
+        {
+            var alreadyConfirmedToken = jwtTokenService.CreateToken(user);
+            return Ok(alreadyConfirmedToken);
+        }
+
+        string decodedToken;
+        try
+        {
+            decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token.Trim()));
+        }
+        catch (FormatException)
+        {
+            return BadRequest("Invalid token format.");
+        }
+
+        var confirmResult = await userManager.ConfirmEmailAsync(user, decodedToken);
+        if (!confirmResult.Succeeded)
+        {
+            return BadRequest(new
+            {
+                Errors = confirmResult.Errors.Select(e => e.Description).ToArray()
+            });
+        }
+
+        var token = jwtTokenService.CreateToken(user);
+        return Ok(token);
+    }
+
+    [HttpPost("resend-confirmation")]
+    [EnableRateLimiting("AuthForgotPassword")]
+    public async Task<IActionResult> ResendConfirmation([FromBody] ResendEmailConfirmationRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.UsernameOrEmail))
+        {
+            return BadRequest("Username or email is required.");
+        }
+
+        var identifier = request.UsernameOrEmail.Trim();
+        var user = await userManager.FindByNameAsync(identifier) ?? await userManager.FindByEmailAsync(identifier);
+
+        if (user is not null && !user.EmailConfirmed)
+        {
+            await SendEmailConfirmationAsync(user, cancellationToken);
+        }
+
+        return Ok("If the account exists and is not confirmed, a confirmation email has been sent.");
     }
 
     [HttpPost("forgot-password")]
@@ -144,5 +221,29 @@ public class AuthController(
         }
 
         return Ok("Password has been reset.");
+    }
+
+    private async Task SendEmailConfirmationAsync(ApplicationUser user, CancellationToken cancellationToken)
+    {
+        var frontendBaseUrl = _frontendOptions.BaseUrl.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(frontendBaseUrl))
+        {
+            throw new InvalidOperationException("Frontend:BaseUrl configuration is required for email confirmation links.");
+        }
+
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            throw new InvalidOperationException("Cannot send email confirmation because the user email is missing.");
+        }
+
+        var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        var confirmationUrl = $"{frontendBaseUrl}/confirm-email?userId={Uri.EscapeDataString(user.Id)}&token={Uri.EscapeDataString(encodedToken)}";
+
+        await emailSender.SendAsync(
+            user.Email,
+            "Confirm your ChessXiv account",
+            $"<p>Welcome to ChessXiv.</p><p><a href=\"{confirmationUrl}\">Confirm your email</a></p><p>If you did not create this account, you can ignore this message.</p>",
+            cancellationToken);
     }
 }

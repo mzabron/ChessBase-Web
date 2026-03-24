@@ -4,10 +4,13 @@ import { Observable, map } from 'rxjs';
 import { AuthApiService } from './auth-api.service';
 import {
   AuthLoginRequest,
+  AuthRegisterResponse,
   AuthRegisterRequest,
+  ConfirmEmailRequest,
   AuthTokenResponse,
   AuthUser,
   ForgotPasswordRequest,
+  ResendEmailConfirmationRequest,
   ResetPasswordRequest
 } from './auth.models';
 import { AuthSessionService } from './auth-session.service';
@@ -41,10 +44,8 @@ export class AuthStateService {
     );
   }
 
-  register(request: AuthRegisterRequest): Observable<AuthUser> {
-    return this.authApi.register(request).pipe(
-      map(response => this.applyTokenResponse(response))
-    );
+  register(request: AuthRegisterRequest): Observable<AuthRegisterResponse> {
+    return this.authApi.register(request);
   }
 
   forgotPassword(request: ForgotPasswordRequest): Observable<string> {
@@ -53,6 +54,16 @@ export class AuthStateService {
 
   resetPassword(request: ResetPasswordRequest): Observable<string> {
     return this.authApi.resetPassword(request);
+  }
+
+  resendConfirmation(request: ResendEmailConfirmationRequest): Observable<string> {
+    return this.authApi.resendConfirmation(request);
+  }
+
+  confirmEmail(request: ConfirmEmailRequest): Observable<AuthUser> {
+    return this.authApi.confirmEmail(request).pipe(
+      map(response => this.applyTokenResponse(response))
+    );
   }
 
   logout(): void {

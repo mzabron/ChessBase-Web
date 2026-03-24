@@ -14,28 +14,55 @@ namespace ChessXiv.UnitTests;
 public class AuthControllerTests
 {
     [Fact]
-    public async Task Register_ReturnsOk_AndCallsCreateWithExpectedEmail_WhenValidRequest()
+    public async Task Register_ReturnsAccepted_AndSendsConfirmationEmail_WhenValidRequest()
     {
         var userManager = new TestUserManager
         {
-            CreateAsyncHandler = (_, _) => Task.FromResult(IdentityResult.Success)
+            CreateAsyncHandler = (_, _) => Task.FromResult(IdentityResult.Success),
+            GenerateEmailConfirmationTokenAsyncHandler = _ => Task.FromResult("email-confirm-token")
         };
 
-        var tokenService = new FakeJwtTokenService
-        {
-            AccessToken = "register-token"
-        };
-        var controller = CreateController(userManager, tokenService);
+        var emailSender = new FakeEmailSender();
+        var controller = CreateController(userManager, new FakeJwtTokenService(), emailSender);
 
         var request = new AuthRegisterRequest("john", "john@example.com", "Password123");
-        var actionResult = await controller.Register(request);
+        var actionResult = await controller.Register(request, CancellationToken.None);
 
-        var ok = Assert.IsType<OkObjectResult>(actionResult);
-        var response = Assert.IsType<AuthTokenResponse>(ok.Value);
-        Assert.Equal("register-token", response.AccessToken);
+        var accepted = Assert.IsType<AcceptedResult>(actionResult);
+        var response = Assert.IsType<AuthRegisterResponse>(accepted.Value);
+        Assert.True(response.RequiresEmailConfirmation);
+        Assert.Equal("john@example.com", response.Email);
         Assert.Equal("john@example.com", userManager.LastCreatedUser?.Email);
         Assert.Equal("john", userManager.LastCreatedUser?.UserName);
         Assert.Equal("Password123", userManager.LastCreatedPassword);
+        Assert.Equal("john@example.com", emailSender.LastToEmail);
+        Assert.Contains("Confirm your ChessXiv account", emailSender.LastSubject ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task Login_ReturnsForbidden_WhenEmailIsNotConfirmed()
+    {
+        var user = new ApplicationUser
+        {
+            Id = "user-1",
+            UserName = "john",
+            Email = "john@example.com",
+            EmailConfirmed = false
+        };
+
+        var userManager = new TestUserManager
+        {
+            FindByNameAsyncHandler = _ => Task.FromResult<ApplicationUser?>(user),
+            CheckPasswordAsyncHandler = (_, _) => Task.FromResult(true)
+        };
+
+        var controller = CreateController(userManager, new FakeJwtTokenService());
+        var request = new AuthLoginRequest("john", "Password123");
+
+        var actionResult = await controller.Login(request);
+
+        var forbidden = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(403, forbidden.StatusCode);
     }
 
     [Fact]
@@ -53,7 +80,7 @@ public class AuthControllerTests
         var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthRegisterRequest("john", "john@example.com", "Password123");
-        var actionResult = await controller.Register(request);
+        var actionResult = await controller.Register(request, CancellationToken.None);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult);
         Assert.Equal(400, badRequest.StatusCode ?? 400);
@@ -76,7 +103,7 @@ public class AuthControllerTests
         var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthRegisterRequest("john", "not-an-email", "Password123");
-        var actionResult = await controller.Register(request);
+        var actionResult = await controller.Register(request, CancellationToken.None);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult);
         var errors = ExtractErrors(badRequest.Value);
@@ -98,7 +125,7 @@ public class AuthControllerTests
         var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthRegisterRequest("john", "john@example.com", "Password123");
-        var actionResult = await controller.Register(request);
+        var actionResult = await controller.Register(request, CancellationToken.None);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult);
         var errors = ExtractErrors(badRequest.Value);
@@ -112,7 +139,8 @@ public class AuthControllerTests
         {
             Id = "user-1",
             UserName = "john",
-            Email = "john@example.com"
+            Email = "john@example.com",
+            EmailConfirmed = true
         };
 
         var userManager = new TestUserManager
@@ -193,8 +221,15 @@ public class AuthControllerTests
 
     private sealed class FakeEmailSender : IEmailSender
     {
+        public string? LastToEmail { get; private set; }
+        public string? LastSubject { get; private set; }
+        public string? LastBody { get; private set; }
+
         public Task SendAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
         {
+            LastToEmail = toEmail;
+            LastSubject = subject;
+            LastBody = body;
             return Task.CompletedTask;
         }
     }
@@ -205,6 +240,7 @@ public class AuthControllerTests
         public Func<string, Task<ApplicationUser?>>? FindByNameAsyncHandler { get; init; }
         public Func<string, Task<ApplicationUser?>>? FindByEmailAsyncHandler { get; init; }
         public Func<ApplicationUser, string, Task<bool>>? CheckPasswordAsyncHandler { get; init; }
+        public Func<ApplicationUser, Task<string>>? GenerateEmailConfirmationTokenAsyncHandler { get; init; }
         public ApplicationUser? LastCreatedUser { get; private set; }
         public string? LastCreatedPassword { get; private set; }
 
@@ -246,6 +282,12 @@ public class AuthControllerTests
         {
             return CheckPasswordAsyncHandler?.Invoke(user, password)
                 ?? Task.FromResult(false);
+        }
+
+        public override Task<string> GenerateEmailConfirmationTokenAsync(ApplicationUser user)
+        {
+            return GenerateEmailConfirmationTokenAsyncHandler?.Invoke(user)
+                ?? Task.FromResult("confirmation-token");
         }
     }
 
@@ -327,12 +369,15 @@ public class AuthControllerTests
         return errors!;
     }
 
-    private static AuthController CreateController(TestUserManager userManager, FakeJwtTokenService tokenService)
+    private static AuthController CreateController(
+        TestUserManager userManager,
+        FakeJwtTokenService tokenService,
+        FakeEmailSender? emailSender = null)
     {
         return new AuthController(
             userManager,
             tokenService,
-            new FakeEmailSender(),
+            emailSender ?? new FakeEmailSender(),
             Options.Create(new FrontendOptions { BaseUrl = "https://chessxiv.org" }));
     }
 }
