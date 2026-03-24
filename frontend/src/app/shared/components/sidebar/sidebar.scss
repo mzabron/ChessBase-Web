@@ -82,19 +82,55 @@
   position: absolute;
   top: 0;
   right: 52px;
-  min-width: 110px;
-  padding: 8px;
+  width: 280px;
+  max-width: 280px;
+  padding: 10px;
   border-radius: 10px;
   border: 1px solid #d1d5db;
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.12);
 }
 
+.menu-loading {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.menu-profile {
+  padding: 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+}
+
+.menu-nickname {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.menu-quota {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.menu-actions,
+.menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu-btn,
 .signout-btn {
   width: 100%;
-  border: none;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
-  background: transparent;
+  background: #ffffff;
   color: #111827;
   font-size: 13px;
   font-weight: 600;
@@ -105,6 +141,63 @@
   &:hover {
     background: #f3f4f6;
   }
+}
+
+.menu-btn.primary {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+.menu-btn.ghost {
+  background: transparent;
+}
+
+.menu-btn.danger {
+  color: #b91c1c;
+}
+
+.menu-form label {
+  font-size: 12px;
+  color: #374151;
+}
+
+.menu-form input {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.menu-warning {
+  margin: 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.menu-current-email {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.menu-feedback {
+  margin: 0 0 8px;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.menu-feedback.error {
+  background: rgba(220, 38, 38, 0.1);
+  color: #991b1b;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+.menu-feedback.info {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.25);
 }
 
 // Dark theme variables
@@ -123,9 +216,58 @@
 
   .signout-btn {
     color: #f9fafb;
+    border-color: #374151;
+    background: #111827;
 
     &:hover {
       background: #1f2937;
     }
+  }
+
+  .menu-btn {
+    color: #f9fafb;
+    border-color: #374151;
+    background: #111827;
+
+    &:hover {
+      background: #1f2937;
+    }
+  }
+
+  .menu-btn.primary {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+  }
+
+  .menu-profile {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  .menu-nickname {
+    color: #f8fafc;
+  }
+
+  .menu-quota,
+  .menu-loading,
+  .menu-form label,
+  .menu-current-email {
+    color: #cbd5e1;
+  }
+
+  .menu-form input {
+    background: #0f172a;
+    color: #f8fafc;
+    border-color: #334155;
+  }
+
+  .menu-feedback.error {
+    color: #fecaca;
+    border-color: rgba(248, 113, 113, 0.35);
+  }
+
+  .menu-feedback.info {
+    color: #bfdbfe;
+    border-color: rgba(96, 165, 250, 0.35);
   }
 }

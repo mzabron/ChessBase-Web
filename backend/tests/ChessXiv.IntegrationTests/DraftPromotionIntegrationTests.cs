@@ -561,5 +561,10 @@ public class DraftPromotionIntegrationTests(PostgresTestFixture fixture)
         {
             return Task.FromResult(maxDraftImportGames);
         }
+
+        public Task<int> GetMaxSavedGamesAsync(string? ownerUserId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(10_000);
+        }
     }
 }

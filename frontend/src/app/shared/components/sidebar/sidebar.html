@@ -14,7 +14,67 @@
 
       @if (isAuthenticated && isUserMenuOpen) {
         <div class="user-menu" (click)="$event.stopPropagation()">
-          <button type="button" class="signout-btn" (click)="onSignOutClick($event)">Sign out</button>
+          @if (accountError()) {
+            <p class="menu-feedback error">{{ accountError() }}</p>
+          }
+
+          @if (accountInfo()) {
+            <p class="menu-feedback info">{{ accountInfo() }}</p>
+          }
+
+          @if (isLoadingSummary()) {
+            <p class="menu-loading">Loading account...</p>
+          } @else if (accountSummary(); as summary) {
+            <div class="menu-profile">
+              <p class="menu-nickname">{{ summary.nickname || userName }}</p>
+              <p class="menu-quota">Saved games: {{ formatQuota(summary.savedGamesUsed, summary.savedGamesLimit) }}</p>
+              <p class="menu-quota">Imported games: {{ formatQuota(summary.importedGamesUsed, summary.importedGamesLimit) }}</p>
+            </div>
+          }
+
+          @if (activePanel() === 'none') {
+            <div class="menu-actions">
+              <button type="button" class="menu-btn" (click)="openPanel('change-email')">Change email</button>
+              <button type="button" class="menu-btn" (click)="openPanel('change-password')">Change password</button>
+              <button type="button" class="menu-btn danger" (click)="openPanel('delete-account')">Delete account</button>
+              <button type="button" class="signout-btn" (click)="onSignOutClick($event)">Sign out</button>
+            </div>
+          }
+
+          @if (activePanel() === 'change-email') {
+            <form class="menu-form" [formGroup]="changeEmailForm" (ngSubmit)="submitChangeEmail()">
+              @if (accountSummary(); as summary) {
+                <p class="menu-current-email">Current email: <strong>{{ summary.email || 'not set' }}</strong></p>
+              }
+              <label for="menu-new-email">New email</label>
+              <input id="menu-new-email" type="email" formControlName="newEmail" placeholder="new@email.com" />
+              <label for="menu-email-password">Current password</label>
+              <input id="menu-email-password" type="password" formControlName="currentPassword" placeholder="Current password" />
+              <button type="submit" class="menu-btn primary">Save email</button>
+              <button type="button" class="menu-btn ghost" (click)="closePanel()">Back</button>
+            </form>
+          }
+
+          @if (activePanel() === 'change-password') {
+            <form class="menu-form" [formGroup]="changePasswordForm" (ngSubmit)="submitChangePassword()">
+              <label for="menu-current-password">Current password</label>
+              <input id="menu-current-password" type="password" formControlName="currentPassword" placeholder="Current password" />
+              <label for="menu-new-password">New password</label>
+              <input id="menu-new-password" type="password" formControlName="newPassword" placeholder="At least 8 characters" />
+              <button type="submit" class="menu-btn primary">Update password</button>
+              <button type="button" class="menu-btn ghost" (click)="closePanel()">Back</button>
+            </form>
+          }
+
+          @if (activePanel() === 'delete-account') {
+            <form class="menu-form" [formGroup]="deleteAccountForm" (ngSubmit)="submitDeleteAccount()">
+              <p class="menu-warning">This will permanently delete your account and data.</p>
+              <label for="menu-delete-password">Current password</label>
+              <input id="menu-delete-password" type="password" formControlName="password" placeholder="Current password" />
+              <button type="submit" class="menu-btn danger">Delete permanently</button>
+              <button type="button" class="menu-btn ghost" (click)="closePanel()">Back</button>
+            </form>
+          }
         </div>
       }
     </div>
