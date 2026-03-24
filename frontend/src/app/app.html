@@ -1,9 +1,20 @@
-<main class="app-layout">
+<main *ngIf="!isResetPasswordView" class="app-layout">
   <div class="content-area">
     <app-explorer-page [isFocusMode]="isFocusMode" />
   </div>
   <app-sidebar (loginClick)="toggleLoginModal()" (toggleLayout)="toggleFocusMode()" (aboutClick)="toggleAboutModal()" />
 </main>
 
-<app-login-modal *ngIf="isLoginModalOpen" (close)="toggleLoginModal()" />
-<app-about-modal *ngIf="isAboutModalOpen" (close)="toggleAboutModal()" />
+<app-login-modal
+  *ngIf="isLoginModalOpen"
+  (close)="toggleLoginModal()"
+  (authenticated)="onAuthenticated()" />
+
+<app-login-modal
+  *ngIf="isResetPasswordView"
+  [initialMode]="'reset'"
+  [resetEmail]="resetEmail"
+  [resetToken]="resetToken"
+  [showCloseButton]="false" />
+
+<app-about-modal *ngIf="isAboutModalOpen && !isResetPasswordView" (close)="toggleAboutModal()" />

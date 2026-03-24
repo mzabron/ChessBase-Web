@@ -1,5 +1,6 @@
-import { Component, ElementRef, HostListener, ViewChild, Input } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, Input, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { forkJoin } from 'rxjs';
 import { ChessboardComponent } from '../../components/chessboard/chessboard.component';
 import { GamesListComponent } from '../../components/games-list/games-list.component';
 import { GamesTreeComponent } from '../../components/games-tree/games-tree.component';
@@ -9,6 +10,9 @@ import { FiltersPanelComponent } from '../../components/filters-panel/filters-pa
 import { DatabasesPanelComponent } from '../../components/databases-panel/databases-panel.component';
 import { GamesTableComponent } from '../../components/games-table/games-table.component';
 import { MoveRow } from '../../components/move-list/move-list.component';
+import { AuthStateService } from '../../../../core/auth/auth-state.service';
+import { UserDatabasesApiService } from '../../services/user-databases-api.service';
+import { Database } from '../../components/databases-panel/databases-panel.component';
 
 @Component({
   selector: 'app-explorer-page',
@@ -18,6 +22,11 @@ import { MoveRow } from '../../components/move-list/move-list.component';
   styleUrl: './explorer-page.component.scss'
 })
 export class ExplorerPageComponent {
+  private readonly authState = inject(AuthStateService);
+  private readonly userDatabasesApi = inject(UserDatabasesApiService);
+
+  private readonly loadedForCurrentSession = signal(false);
+
   @Input() isFocusMode = false;
 
   @ViewChild('layoutRoot', { static: true })
@@ -26,11 +35,9 @@ export class ExplorerPageComponent {
   protected gamesLoaded = false;
   protected currentDatabaseName = 'Games';
   protected currentGamesSource: 'imported' | 'external' = 'imported';
-  protected myDatabases = [
-    { id: 'db-1', name: 'My White Repertoire' },
-    { id: 'db-2', name: 'Rapid Practice' },
-    { id: 'db-3', name: 'Endgames Lab' }
-  ];
+  protected readonly myDatabases = signal<Array<{ id: string; name: string }>>([]);
+  protected readonly panelDatabases = signal<Database[]>([]);
+  protected readonly currentUserName = this.authState.userName;
   protected moveRows: MoveRow[] = [];
   protected currentPly = 0;
   protected navigationRequest: { ply: number; version: number } | null = null;
@@ -80,6 +87,23 @@ export class ExplorerPageComponent {
   private static readonly boardMoveGap = 12;
   private static readonly rightColumnMinWidth = 390;
   private static readonly handleWidth = 8;
+
+  constructor() {
+    effect(() => {
+      if (!this.authState.isAuthenticated()) {
+        this.loadedForCurrentSession.set(false);
+        this.myDatabases.set([]);
+        this.panelDatabases.set([]);
+        return;
+      }
+
+      if (this.loadedForCurrentSession()) {
+        return;
+      }
+
+      this.loadUserDatabases();
+    });
+  }
 
   protected startResize(event: MouseEvent): void {
     event.preventDefault();
@@ -147,13 +171,13 @@ export class ExplorerPageComponent {
     console.log('Save database modal submit', payload);
 
     if (payload.mode === 'create' && payload.newDatabaseName) {
-      this.myDatabases = [
+      this.myDatabases.set([
         {
           id: `db-${Date.now()}`,
           name: payload.newDatabaseName
         },
-        ...this.myDatabases
-      ];
+        ...this.myDatabases()
+      ]);
     }
   }
 
@@ -172,5 +196,40 @@ export class ExplorerPageComponent {
   protected onPlySelected(ply: number): void {
     this.navigationVersion++;
     this.navigationRequest = { ply, version: this.navigationVersion };
+  }
+
+  private loadUserDatabases(): void {
+    forkJoin({
+      mine: this.userDatabasesApi.getMine(),
+      bookmarks: this.userDatabasesApi.getBookmarks()
+    }).subscribe({
+      next: ({ mine, bookmarks }) => {
+        this.loadedForCurrentSession.set(true);
+        this.myDatabases.set(mine.map(db => ({ id: db.id, name: db.name })));
+
+        const mineMapped: Database[] = mine.map(db => ({
+          id: db.id,
+          name: db.name,
+          owner: this.currentUserName() ?? db.ownerUserId,
+          creationDate: new Date(db.createdAtUtc),
+          gamesCount: db.gamesCount
+        }));
+
+        const bookmarkMapped: Database[] = bookmarks
+          .filter(bookmark => !mine.some(owned => owned.id === bookmark.id))
+          .map(bookmark => ({
+            id: bookmark.id,
+            name: bookmark.name,
+            owner: bookmark.ownerUserId,
+            creationDate: new Date(bookmark.createdAtUtc),
+            gamesCount: bookmark.gamesCount
+          }));
+
+        this.panelDatabases.set([...mineMapped, ...bookmarkMapped]);
+      },
+      error: () => {
+        this.loadedForCurrentSession.set(false);
+      }
+    });
   }
 }

@@ -1,32 +1,108 @@
 <div class="modal-overlay" (click)="onClose()">
   <div class="modal-container" (click)="$event.stopPropagation()">
-    <button class="close-btn" (click)="onClose()" title="Close">
+    <button *ngIf="showCloseButton" class="close-btn" (click)="onClose()" title="Close">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
     </button>
     
     <div class="modal-header">
-      <h2>Welcome Back</h2>
-      <p>Log in to access your saved games and settings.</p>
+      <h2>ChessXiv Account</h2>
+      <p>Sign in to access your databases and bookmarks.</p>
     </div>
 
-    <form class="login-form">
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" placeholder="Enter your email" required />
-      </div>
+    <div class="mode-switch">
+      <button type="button" class="mode-btn" [class.active]="mode() === 'login'" (click)="switchMode('login')">Sign in</button>
+      <button type="button" class="mode-btn" [class.active]="mode() === 'register'" (click)="switchMode('register')">Register</button>
+      <button type="button" class="mode-btn" [class.active]="mode() === 'forgot'" (click)="switchMode('forgot')">Forgot</button>
+      @if (!showCloseButton) {
+        <button type="button" class="mode-btn" [class.active]="mode() === 'reset'" (click)="switchMode('reset')">Reset</button>
+      }
+    </div>
 
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter your password" required />
-      </div>
+    @if (errorMessage()) {
+      <p class="feedback error">{{ errorMessage() }}</p>
+    }
 
-      <button type="button" class="btn-primary" (click)="onClose()">Sign In</button>
-      
-      <div class="divider">
-        <span>or</span>
-      </div>
+    @if (infoMessage()) {
+      <p class="feedback info">{{ infoMessage() }}</p>
+    }
 
-      <button type="button" class="btn-secondary" (click)="onClose()">Create an Account</button>
-    </form>
+    @if (mode() === 'login') {
+      <form class="login-form" [formGroup]="loginForm" (ngSubmit)="submitLogin()">
+        <div class="form-group">
+          <label for="login">Email or login</label>
+          <input id="login" type="text" formControlName="login" placeholder="Enter login or email" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input id="password" type="password" formControlName="password" placeholder="Enter your password" />
+        </div>
+
+        <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Signing in...' : 'Sign In' }}</button>
+      </form>
+    }
+
+    @if (mode() === 'register') {
+      <form class="login-form" [formGroup]="registerForm" (ngSubmit)="submitRegister()">
+        <div class="form-group">
+          <label for="register-login">Login</label>
+          <input id="register-login" type="text" formControlName="login" placeholder="Choose login" />
+        </div>
+
+        <div class="form-group">
+          <label for="register-email">Email</label>
+          <input id="register-email" type="email" formControlName="email" placeholder="Enter email" />
+        </div>
+
+        <div class="form-group">
+          <label for="register-password">Password</label>
+          <input id="register-password" type="password" formControlName="password" placeholder="At least 8 characters" />
+        </div>
+
+        <div class="form-group">
+          <label for="register-confirm-password">Confirm password</label>
+          <input id="register-confirm-password" type="password" formControlName="confirmPassword" placeholder="Retype password" />
+        </div>
+
+        <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Creating...' : 'Create account' }}</button>
+      </form>
+    }
+
+    @if (mode() === 'forgot') {
+      <form class="login-form" [formGroup]="forgotForm" (ngSubmit)="submitForgotPassword()">
+        <div class="form-group">
+          <label for="forgot-email">Email</label>
+          <input id="forgot-email" type="email" formControlName="email" placeholder="Enter account email" />
+        </div>
+
+        <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Sending...' : 'Send reset link' }}</button>
+      </form>
+    }
+
+    @if (mode() === 'reset') {
+      <form class="login-form" [formGroup]="resetForm" (ngSubmit)="submitResetPassword()">
+        <div class="form-group">
+          <label for="reset-email">Email</label>
+          <input id="reset-email" type="email" formControlName="email" placeholder="Enter account email" />
+        </div>
+
+        <div class="form-group">
+          <label for="reset-token">Reset token</label>
+          <input id="reset-token" type="text" formControlName="token" placeholder="Token from reset email" />
+        </div>
+
+        <div class="form-group">
+          <label for="reset-password">New password</label>
+          <input id="reset-password" type="password" formControlName="newPassword" placeholder="At least 8 characters" />
+        </div>
+
+        <div class="form-group">
+          <label for="reset-confirm-password">Confirm new password</label>
+          <input id="reset-confirm-password" type="password" formControlName="confirmPassword" placeholder="Retype password" />
+        </div>
+
+        <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Updating...' : 'Reset password' }}</button>
+      </form>
+    }
   </div>
 </div>

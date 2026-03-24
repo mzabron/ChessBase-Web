@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { EmptyGamesStateComponent } from '../empty-games-state/empty-games-state.component';
 import { FiltersPanelComponent } from '../filters-panel/filters-panel.component';
-import { DatabasesPanelComponent } from '../databases-panel/databases-panel.component';
+import { Database, DatabasesPanelComponent } from '../databases-panel/databases-panel.component';
 import { GamesTableComponent } from '../games-table/games-table.component';
 
 interface UserDatabaseOption {
@@ -30,6 +30,8 @@ export class GamesListComponent {
   @Input() databaseName = 'Games';
   @Input() sourceType: 'imported' | 'external' = 'imported';
   @Input() myDatabases: UserDatabaseOption[] = [];
+  @Input() panelDatabases: Database[] = [];
+  @Input() currentUserName = '';
   protected activeTab: 'databases' | 'games' | 'filters' = 'games';
   protected isSaveModalOpen = false;
   protected saveMode: 'merge' | 'create' = 'merge';

@@ -16,7 +16,7 @@
 
   @if (activeTab === 'databases') {
   <div class="tab-body" role="tabpanel" aria-label="Databases tab content">
-    <app-databases-panel />
+    <app-databases-panel [databases]="panelDatabases" [currentUser]="currentUserName" />
   </div>
   } @else if (activeTab === 'games') {
   <div class="tab-body" role="tabpanel" aria-label="Games tab content">

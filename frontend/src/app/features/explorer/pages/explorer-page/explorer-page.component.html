@@ -35,7 +35,9 @@
       [games]="mockGames"
       [databaseName]="currentDatabaseName"
       [sourceType]="currentGamesSource"
-      [myDatabases]="myDatabases"
+      [myDatabases]="myDatabases()"
+      [panelDatabases]="panelDatabases()"
+      [currentUserName]="currentUserName() ?? ''"
       (importDatabase)="importDatabase()"
       (searchCommunityDatabase)="searchCommunityDatabase()"
       (saveDatabase)="saveCurrentDatabase()"
@@ -57,7 +59,7 @@
       </div>
       <div class="tab-body fade-in">
         <div *ngIf="focusRightTab === 'databases'" class="full-height-child">
-          <app-databases-panel />
+          <app-databases-panel [databases]="panelDatabases()" [currentUser]="currentUserName() ?? ''" />
         </div>
         <app-games-tree *ngIf="focusRightTab === 'tree'" class="full-height-child" />
         <app-move-list

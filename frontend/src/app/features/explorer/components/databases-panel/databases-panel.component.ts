@@ -1,8 +1,8 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, Input, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-interface Database {
+export interface Database {
   id: string;
   name: string;
   owner: string;
@@ -18,21 +18,19 @@ interface Database {
   styleUrl: './databases-panel.component.scss'
 })
 export class DatabasesPanelComponent {
-  private readonly currentUser = 'max';
+  @Input() currentUser = '';
+  @Input() set databases(value: Database[]) {
+    this.databasesSignal.set(value ?? []);
+  }
 
   searchQuery = signal('');
   sortByCreationDesc = signal(true);
   myDatabasesOnly = signal(false);
 
-  databases = signal<Database[]>([
-    { id: '1', name: 'My White Repertoire', owner: 'max', creationDate: new Date('2026-01-10'), gamesCount: 154 },
-    { id: '2', name: 'Grandmaster Games 2025', owner: 'admin', creationDate: new Date('2025-12-01'), gamesCount: 12450 },
-    { id: '3', name: 'Tactics Trainer', owner: 'john_doe', creationDate: new Date('2026-02-15'), gamesCount: 500 },
-    { id: '4', name: 'Endgame Studies', owner: 'jane_smith', creationDate: new Date('2026-03-01'), gamesCount: 42 }
-  ]);
+  private readonly databasesSignal = signal<Database[]>([]);
 
   filteredAndSortedDatabases = computed(() => {
-    let result = this.databases();
+    let result = this.databasesSignal();
     const query = this.searchQuery().toLowerCase().trim();
 
     if (this.myDatabasesOnly()) {
@@ -72,12 +70,12 @@ export class DatabasesPanelComponent {
     const newDatabase: Database = {
       id: this.generateId(),
       name: name.trim(),
-      owner: this.currentUser,
+      owner: this.currentUser || 'current-user',
       creationDate: new Date(),
       gamesCount: 0
     };
 
-    this.databases.update(existing => [newDatabase, ...existing]);
+    this.databasesSignal.update(existing => [newDatabase, ...existing]);
   }
 
   private generateId(): string {

@@ -1,6 +1,7 @@
 using ChessXiv.Api.Authentication;
 using ChessXiv.Api.Controllers;
 using ChessXiv.Api.Email;
+using ChessXiv.Api;
 using ChessXiv.Application.Contracts;
 using ChessXiv.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
@@ -24,7 +25,7 @@ public class AuthControllerTests
         {
             AccessToken = "register-token"
         };
-        var controller = new AuthController(userManager, tokenService, new FakeEmailSender());
+        var controller = CreateController(userManager, tokenService);
 
         var request = new AuthRegisterRequest("john", "john@example.com", "Password123");
         var actionResult = await controller.Register(request);
@@ -49,7 +50,7 @@ public class AuthControllerTests
             }))
         };
 
-        var controller = new AuthController(userManager, new FakeJwtTokenService(), new FakeEmailSender());
+        var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthRegisterRequest("john", "john@example.com", "Password123");
         var actionResult = await controller.Register(request);
@@ -72,7 +73,7 @@ public class AuthControllerTests
             }))
         };
 
-        var controller = new AuthController(userManager, new FakeJwtTokenService(), new FakeEmailSender());
+        var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthRegisterRequest("john", "not-an-email", "Password123");
         var actionResult = await controller.Register(request);
@@ -94,7 +95,7 @@ public class AuthControllerTests
             }))
         };
 
-        var controller = new AuthController(userManager, new FakeJwtTokenService(), new FakeEmailSender());
+        var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthRegisterRequest("john", "john@example.com", "Password123");
         var actionResult = await controller.Register(request);
@@ -125,7 +126,7 @@ public class AuthControllerTests
             AccessToken = "login-token"
         };
 
-        var controller = new AuthController(userManager, tokenService, new FakeEmailSender());
+        var controller = CreateController(userManager, tokenService);
 
         var request = new AuthLoginRequest("john", "Password123");
         var actionResult = await controller.Login(request);
@@ -145,7 +146,7 @@ public class AuthControllerTests
             FindByEmailAsyncHandler = _ => Task.FromResult<ApplicationUser?>(null)
         };
 
-        var controller = new AuthController(userManager, new FakeJwtTokenService(), new FakeEmailSender());
+        var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthLoginRequest("missing-user", "Password123");
         var actionResult = await controller.Login(request);
@@ -171,7 +172,7 @@ public class AuthControllerTests
             CheckPasswordAsyncHandler = (_, _) => Task.FromResult(false)
         };
 
-        var controller = new AuthController(userManager, new FakeJwtTokenService(), new FakeEmailSender());
+        var controller = CreateController(userManager, new FakeJwtTokenService());
 
         var request = new AuthLoginRequest("john", "wrong-password");
         var actionResult = await controller.Login(request);
@@ -324,5 +325,14 @@ public class AuthControllerTests
         var errors = errorsProperty!.GetValue(badRequestValue) as string[];
         Assert.NotNull(errors);
         return errors!;
+    }
+
+    private static AuthController CreateController(TestUserManager userManager, FakeJwtTokenService tokenService)
+    {
+        return new AuthController(
+            userManager,
+            tokenService,
+            new FakeEmailSender(),
+            Options.Create(new FrontendOptions { BaseUrl = "https://chessxiv.org" }));
     }
 }

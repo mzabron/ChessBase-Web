@@ -3,9 +3,11 @@ using ChessXiv.Api.Authentication;
 using ChessXiv.Api.Email;
 using ChessXiv.Application.Contracts;
 using ChessXiv.Infrastructure.Data;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
 
 namespace ChessXiv.Api.Controllers;
 
@@ -14,8 +16,11 @@ namespace ChessXiv.Api.Controllers;
 public class AuthController(
     UserManager<ApplicationUser> userManager,
     IJwtTokenService jwtTokenService,
-    IEmailSender emailSender) : ControllerBase
+    IEmailSender emailSender,
+    IOptions<FrontendOptions> frontendOptions) : ControllerBase
 {
+    private readonly FrontendOptions _frontendOptions = frontendOptions.Value;
+
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] AuthRegisterRequest request)
     {
@@ -45,6 +50,7 @@ public class AuthController(
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting("AuthLogin")]
     public async Task<IActionResult> Login([FromBody] AuthLoginRequest request)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
@@ -71,6 +77,7 @@ public class AuthController(
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("AuthForgotPassword")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Email))
@@ -85,11 +92,18 @@ public class AuthController(
         {
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
             var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+            var frontendBaseUrl = _frontendOptions.BaseUrl.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(frontendBaseUrl))
+            {
+                throw new InvalidOperationException("Frontend:BaseUrl configuration is required for password reset links.");
+            }
+
+            var resetUrl = $"{frontendBaseUrl}/reset-password?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(encodedToken)}";
 
             await emailSender.SendAsync(
                 email,
                 "ChessXiv password reset",
-                $"Use this token to reset your password: {encodedToken}",
+                $"<p>You requested a password reset for ChessXiv.</p><p><a href=\"{resetUrl}\">Reset your password</a></p><p>If you did not request this, you can safely ignore this email.</p>",
                 cancellationToken);
         }
 

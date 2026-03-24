@@ -1,4 +1,5 @@
 using System.Text;
+using ChessXiv.Api;
 using ChessXiv.Api.Authentication;
 using ChessXiv.Api.Email;
 using ChessXiv.Application.Abstractions;
@@ -17,18 +18,59 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
+builder.Services.Configure<FrontendOptions>(builder.Configuration.GetSection(FrontendOptions.SectionName));
+builder.Services.Configure<BrevoOptions>(builder.Configuration.GetSection(BrevoOptions.SectionName));
+
+var allowedCorsOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? [];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowAnyOrigin();
+        if (allowedCorsOrigins.Length == 0)
+        {
+            throw new InvalidOperationException("Cors:AllowedOrigins must include at least one allowed origin.");
+        }
+
+        policy.WithOrigins(allowedCorsOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("AuthLogin", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy("AuthForgotPassword", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -94,7 +136,22 @@ builder.Services.AddScoped<IGameExplorerService, GameExplorerService>();
 builder.Services.AddScoped<IPositionPlayService, PositionPlayService>();
 builder.Services.AddScoped<IQuotaService, UserQuotaService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+builder.Services.AddHttpClient<BrevoEmailSender>(httpClient =>
+{
+    httpClient.BaseAddress = new Uri("https://api.brevo.com");
+});
+builder.Services.AddScoped<LoggingEmailSender>();
+builder.Services.AddScoped<IEmailSender>(serviceProvider =>
+{
+    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<BrevoOptions>>().Value;
+
+    if (!string.IsNullOrWhiteSpace(options.ApiKey) && !string.IsNullOrWhiteSpace(options.SenderEmail))
+    {
+        return serviceProvider.GetRequiredService<BrevoEmailSender>();
+    }
+
+    return serviceProvider.GetRequiredService<LoggingEmailSender>();
+});
 
 var app = builder.Build();
 
@@ -126,6 +183,7 @@ app.UseExceptionHandler(exceptionHandlerApp =>
     });
 });
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseCors("Frontend");
 app.UseAuthorization();
