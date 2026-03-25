@@ -38,7 +38,8 @@ export class Sidebar {
 
   protected readonly changePasswordForm = this.fb.nonNullable.group({
     currentPassword: ['', [Validators.required]],
-    newPassword: ['', [Validators.required, Validators.minLength(8)]]
+    newPassword: ['', [Validators.required, Validators.minLength(8)]],
+    confirmNewPassword: ['', [Validators.required]]
   });
 
   protected readonly deleteAccountForm = this.fb.nonNullable.group({
@@ -60,6 +61,8 @@ export class Sidebar {
     if (this.isAuthenticated) {
       this.isUserMenuOpen = !this.isUserMenuOpen;
       if (this.isUserMenuOpen) {
+        this.accountError.set(null);
+        this.accountInfo.set(null);
         this.activePanel.set('none');
         this.loadSummary();
       }
@@ -93,12 +96,25 @@ export class Sidebar {
       });
     }
 
+    if (panel === 'change-password') {
+      this.changePasswordForm.reset({
+        currentPassword: '',
+        newPassword: '',
+        confirmNewPassword: ''
+      });
+    }
+
     this.activePanel.set(panel);
   }
 
   protected closePanel(): void {
     this.accountError.set(null);
     this.accountInfo.set(null);
+    this.changePasswordForm.reset({
+      currentPassword: '',
+      newPassword: '',
+      confirmNewPassword: ''
+    });
     this.activePanel.set('none');
   }
 
@@ -137,6 +153,12 @@ export class Sidebar {
     }
 
     const raw = this.changePasswordForm.getRawValue();
+
+    if (raw.newPassword !== raw.confirmNewPassword) {
+      this.accountError.set('New password and retyped password do not match.');
+      return;
+    }
+
     this.accountError.set(null);
     this.accountInfo.set(null);
 
@@ -146,8 +168,13 @@ export class Sidebar {
     }).subscribe({
       next: (message) => {
         this.accountInfo.set(message || 'Password updated successfully.');
-        this.signOutClick.emit();
-        this.isUserMenuOpen = false;
+        this.accountError.set(null);
+        this.changePasswordForm.reset({
+          currentPassword: '',
+          newPassword: '',
+          confirmNewPassword: ''
+        });
+        this.activePanel.set('none');
       },
       error: (error) => {
         this.accountError.set(this.extractErrorMessage(error, 'Unable to change password.'));
@@ -206,7 +233,8 @@ export class Sidebar {
       const payload = (error as { error: unknown }).error;
 
       if (typeof payload === 'string' && payload.trim().length > 0) {
-        return payload;
+        const parsedMessage = this.tryExtractMessageFromJsonString(payload);
+        return parsedMessage ?? payload;
       }
 
       if (typeof payload === 'object' && payload !== null && 'errors' in payload) {
@@ -225,6 +253,33 @@ export class Sidebar {
     }
 
     return fallback;
+  }
+
+  private tryExtractMessageFromJsonString(raw: string): string | null {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed !== 'object' || parsed === null) {
+        return null;
+      }
+
+      if ('errors' in parsed) {
+        const errors = (parsed as { errors?: unknown }).errors;
+        if (Array.isArray(errors) && errors.length > 0) {
+          return String(errors[0]);
+        }
+      }
+
+      if ('Errors' in parsed) {
+        const errors = (parsed as { Errors?: unknown }).Errors;
+        if (Array.isArray(errors) && errors.length > 0) {
+          return String(errors[0]);
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   onToggleLayout() {

@@ -13,6 +13,8 @@ import { AuthStateService } from '../../../core/auth/auth-state.service';
 })
 export class LoginModal implements OnInit {
   private static readonly verifyEmailMessage = 'Please confirm your email address before signing in.';
+  private static readonly forgotPasswordSentMessage = 'If the email exists, password reset instructions have been sent.';
+  private static readonly passwordResetSuccessMessage = 'Password changed successfully. You can go back and log in.';
 
   private readonly authState = inject(AuthStateService);
   private readonly fb = inject(FormBuilder);
@@ -31,6 +33,7 @@ export class LoginModal implements OnInit {
   protected readonly pendingConfirmationIdentifier = signal('');
   protected readonly showChangePendingEmail = signal(false);
   protected readonly pendingEmailChangePassword = signal('');
+  protected readonly resetCompleted = signal(false);
 
   protected readonly loginForm = this.fb.nonNullable.group({
     username: ['', [Validators.required]],
@@ -69,6 +72,10 @@ export class LoginModal implements OnInit {
         token: this.resetToken
       });
     }
+
+    if (this.initialMode === 'reset' && (!this.resetEmail.trim() || !this.resetToken.trim())) {
+      this.errorMessage.set('Password reset link is invalid or incomplete. Please request a new reset link.');
+    }
   }
 
   onClose(event?: MouseEvent) {
@@ -82,6 +89,7 @@ export class LoginModal implements OnInit {
     this.mode.set(nextMode);
     this.errorMessage.set(null);
     this.infoMessage.set(null);
+    this.resetCompleted.set(false);
 
     if (nextMode !== 'verify-email') {
       this.showChangePendingEmail.set(false);
@@ -187,7 +195,7 @@ export class LoginModal implements OnInit {
       .pipe(finalize(() => this.isSubmitting.set(false)))
       .subscribe({
         next: () => {
-          this.infoMessage.set(LoginModal.verifyEmailMessage);
+          this.infoMessage.set(LoginModal.forgotPasswordSentMessage);
           this.errorMessage.set(null);
         },
         error: (error) => {
@@ -197,6 +205,16 @@ export class LoginModal implements OnInit {
   }
 
   protected submitResetPassword(): void {
+    if (this.resetCompleted()) {
+      return;
+    }
+
+    const token = this.resetForm.controls.token.getRawValue().trim();
+    if (!token) {
+      this.errorMessage.set('Password reset link is invalid or expired. Please request a new reset link.');
+      return;
+    }
+
     if (this.resetForm.invalid) {
       this.resetForm.markAllAsTouched();
       return;
@@ -217,15 +235,18 @@ export class LoginModal implements OnInit {
       .pipe(finalize(() => this.isSubmitting.set(false)))
       .subscribe({
         next: (message) => {
-          this.infoMessage.set(message || 'Password has been reset. You can now sign in.');
+          this.infoMessage.set(message || LoginModal.passwordResetSuccessMessage);
           this.errorMessage.set(null);
-          this.switchMode('login');
-          this.loginForm.patchValue({ username: raw.email.trim(), password: '' });
+          this.resetCompleted.set(true);
         },
         error: (error) => {
           this.errorMessage.set(this.extractErrorMessage(error, 'Unable to reset password.'));
         }
       });
+  }
+
+  protected goToSignIn(): void {
+    window.location.replace('/');
   }
 
   protected openForgotPassword(): void {

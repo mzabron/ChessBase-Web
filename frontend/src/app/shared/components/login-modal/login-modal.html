@@ -118,29 +118,32 @@
     }
 
     @if (mode() === 'reset') {
-      <form class="login-form" [formGroup]="resetForm" (ngSubmit)="submitResetPassword()">
-        <div class="form-group">
-          <label for="reset-email">Email</label>
-          <input id="reset-email" type="email" formControlName="email" placeholder="Enter account email" />
+      @if (resetCompleted()) {
+        <div class="verify-email-block reset-success-block">
+          <h3>Password changed successfully</h3>
+          <p>You can go back and log in with your new password.</p>
+          <button type="button" class="btn-primary" (click)="goToSignIn()">Go to sign in</button>
         </div>
+      } @else {
+        <form class="login-form" [formGroup]="resetForm" (ngSubmit)="submitResetPassword()">
+          <div class="form-group">
+            <label for="reset-email">Email</label>
+            <input id="reset-email" type="email" formControlName="email" placeholder="Enter account email" />
+          </div>
 
-        <div class="form-group">
-          <label for="reset-token">Reset token</label>
-          <input id="reset-token" type="text" formControlName="token" placeholder="Token from reset email" />
-        </div>
+          <div class="form-group">
+            <label for="reset-password">New password</label>
+            <input id="reset-password" type="password" formControlName="newPassword" placeholder="At least 8 characters" />
+          </div>
 
-        <div class="form-group">
-          <label for="reset-password">New password</label>
-          <input id="reset-password" type="password" formControlName="newPassword" placeholder="At least 8 characters" />
-        </div>
+          <div class="form-group">
+            <label for="reset-confirm-password">Confirm new password</label>
+            <input id="reset-confirm-password" type="password" formControlName="confirmPassword" placeholder="Retype password" />
+          </div>
 
-        <div class="form-group">
-          <label for="reset-confirm-password">Confirm new password</label>
-          <input id="reset-confirm-password" type="password" formControlName="confirmPassword" placeholder="Retype password" />
-        </div>
-
-        <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Updating...' : 'Reset password' }}</button>
-      </form>
+          <button type="submit" class="btn-primary" [disabled]="isSubmitting()">{{ isSubmitting() ? 'Updating...' : 'Reset password' }}</button>
+        </form>
+      }
     }
   </div>
 </div>
