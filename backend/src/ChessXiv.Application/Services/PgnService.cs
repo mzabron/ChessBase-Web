@@ -3,6 +3,7 @@ using ChessXiv.Domain.Entities;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace ChessXiv.Application.Services;
 
@@ -57,7 +58,7 @@ public class PgnService : IPgnParser
 
     private static async IAsyncEnumerable<string> ReadGameBlocksAsync(TextReader reader, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var lines = new List<string>(256);
+        var builder = new StringBuilder(16 * 1024);
         var seenMovesSection = false;
         var blankStreak = 0;
 
@@ -76,18 +77,23 @@ public class PgnService : IPgnParser
 
             if (!isBlank && isTagLine && seenMovesSection && blankStreak >= 2)
             {
-                var completed = string.Join("\n", lines).Trim();
+                var completed = builder.ToString().Trim();
                 if (!string.IsNullOrWhiteSpace(completed))
                 {
                     yield return completed;
                 }
 
-                lines.Clear();
+                builder.Clear();
                 seenMovesSection = false;
                 blankStreak = 0;
             }
 
-            lines.Add(line);
+            if (builder.Length > 0)
+            {
+                builder.Append('\n');
+            }
+
+            builder.Append(line);
 
             if (isBlank)
             {
@@ -103,7 +109,7 @@ public class PgnService : IPgnParser
             }
         }
 
-        var finalBlock = string.Join("\n", lines).Trim();
+        var finalBlock = builder.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(finalBlock))
         {
             yield return finalBlock;
@@ -195,15 +201,17 @@ public class PgnService : IPgnParser
             game.BlackElo = parsedBlackElo;
         }
 
-        var rawDate = GetTag(tags, "UTCDate") ?? GetTag(tags, "Date");
-        if (TryParsePgnDate(rawDate, out var parsedDate))
+        var utcDate = GetTag(tags, "UTCDate");
+        var date = GetTag(tags, "Date");
+
+        if (TryParsePgnDate(utcDate, out var parsedUtcDate) || TryParsePgnDate(date, out parsedUtcDate))
         {
-            game.Date = parsedDate;
-            game.Year = parsedDate.Year;
+            game.Date = parsedUtcDate;
+            game.Year = parsedUtcDate.Year;
         }
-        else if (TryExtractYearFromPgnDate(rawDate, out var parsedYear))
+        else if (TryExtractYearFromPgnDate(utcDate, out var parsedUtcYear) || TryExtractYearFromPgnDate(date, out parsedUtcYear))
         {
-            game.Year = parsedYear;
+            game.Year = parsedUtcYear;
         }
     }
 

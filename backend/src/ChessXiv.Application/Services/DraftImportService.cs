@@ -2,6 +2,7 @@ using ChessXiv.Application.Abstractions;
 using ChessXiv.Application.Abstractions.Repositories;
 using ChessXiv.Application.Contracts;
 using ChessXiv.Domain.Entities;
+using System.Diagnostics;
 
 namespace ChessXiv.Application.Services;
 
@@ -44,6 +45,8 @@ public sealed class DraftImportService(
         var skippedCount = 0;
         var batch = new List<StagingGame>(batchSize);
         var remainingCapacity = maxDraftImportGames;
+        var progressStopwatch = Stopwatch.StartNew();
+        var lastProgressPublishMs = 0L;
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
@@ -74,17 +77,25 @@ public sealed class DraftImportService(
                 {
                     await PersistBatchAsync(batch, cancellationToken);
                     batch.Clear();
+                    var forcePublishMs = progressStopwatch.ElapsedMilliseconds;
+                    lastProgressPublishMs = forcePublishMs;
                     await PublishProgressAsync(ownerUserId, parsedCount, importedCount, skippedCount, isCompleted: false, isFailed: false, message: null, cancellationToken);
                 }
-                else if (parsedCount % 10 == 0)
+                else
                 {
-                    await PublishProgressAsync(ownerUserId, parsedCount, importedCount, skippedCount, isCompleted: false, isFailed: false, message: null, cancellationToken);
+                    var nowMs = progressStopwatch.ElapsedMilliseconds;
+                    if (nowMs - lastProgressPublishMs >= 500)
+                    {
+                        lastProgressPublishMs = nowMs;
+                        await PublishProgressAsync(ownerUserId, parsedCount, importedCount, skippedCount, isCompleted: false, isFailed: false, message: null, cancellationToken);
+                    }
                 }
             }
 
             if (batch.Count > 0)
             {
                 await PersistBatchAsync(batch, cancellationToken);
+                batch.Clear();
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -151,6 +162,14 @@ public sealed class DraftImportService(
         await draftImportRepository.AddStagingGamesAsync(stagingArray, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         unitOfWork.ClearTracker();
+
+        foreach (var stagingGame in stagingArray)
+        {
+            stagingGame.Moves = Array.Empty<StagingMove>();
+            stagingGame.Positions = Array.Empty<StagingPosition>();
+        }
+
+        Array.Clear(transientGames, 0, transientGames.Length);
     }
 
     internal static StagingGame MapToStagingGame(Game game, string ownerUserId, DateTime createdAtUtc)

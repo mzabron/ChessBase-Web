@@ -74,4 +74,25 @@ public class PgnServiceTagTests
         Assert.Null(game.Date);
         Assert.Equal(2023, game.Year);
     }
+
+    [Fact]
+    public void ParsePgn_FallsBackToDate_WhenUtcDateIsPartial()
+    {
+        const string pgn = """
+            [Event "UTC Date Fallback"]
+            [Site "Test"]
+            [UTCDate "1992.??.??"]
+            [Date "1992.10.03"]
+            [White "Alpha"]
+            [Black "Beta"]
+            [Result "1-0"]
+
+            1. e4 e5 1-0
+            """;
+
+        var game = _service.ParsePgn(pgn).Single();
+
+        Assert.Equal(new DateTime(1992, 10, 3), game.Date);
+        Assert.Equal(1992, game.Year);
+    }
 }
