@@ -96,6 +96,147 @@ public class UserDatabasesController(ChessXivDbContext dbContext) : ControllerBa
         return Ok(dto);
     }
 
+    [HttpGet("{id:guid}/games")]
+    public async Task<IActionResult> GetGames(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string sortBy = "createdAt",
+        [FromQuery] string sortDirection = "desc",
+        [FromQuery] string resultSortMode = "default",
+        CancellationToken cancellationToken = default)
+    {
+        if (page <= 0)
+        {
+            return BadRequest("Page must be greater than zero.");
+        }
+
+        if (pageSize <= 0 || pageSize > 200)
+        {
+            return BadRequest("Page size must be between 1 and 200.");
+        }
+
+        var userId = GetCurrentUserId();
+
+        var dbInfo = await dbContext.UserDatabases
+            .AsNoTracking()
+            .Where(d => d.Id == id)
+            .Select(d => new
+            {
+                d.Id,
+                d.OwnerUserId,
+                d.IsPublic
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (dbInfo is null)
+        {
+            return NotFound();
+        }
+
+        if (!dbInfo.IsPublic && dbInfo.OwnerUserId != userId)
+        {
+            return Forbid();
+        }
+
+        var normalizedSortBy = (sortBy ?? "createdAt").Trim().ToLowerInvariant();
+        var normalizedSortDirection = (sortDirection ?? "desc").Trim().ToLowerInvariant();
+        var normalizedResultSortMode = (resultSortMode ?? "default").Trim().ToLowerInvariant();
+        var descending = normalizedSortDirection != "asc";
+
+        var query = dbContext.UserDatabaseGames
+            .AsNoTracking()
+            .Where(link => link.UserDatabaseId == id)
+            .Select(link => new
+            {
+                Link = link,
+                Game = link.Game
+            });
+
+        query = (normalizedSortBy, descending) switch
+        {
+            ("year", true) => query
+                .OrderBy(x => x.Game.Year <= 0 ? 1 : 0)
+                .ThenByDescending(x => x.Game.Year)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("year", false) => query
+                .OrderBy(x => x.Game.Year <= 0 ? 1 : 0)
+                .ThenBy(x => x.Game.Year)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("white", true) => query.OrderByDescending(x => x.Game.White).ThenByDescending(x => x.Link.AddedAtUtc),
+            ("white", false) => query.OrderBy(x => x.Game.White).ThenByDescending(x => x.Link.AddedAtUtc),
+            ("black", true) => query.OrderByDescending(x => x.Game.Black).ThenByDescending(x => x.Link.AddedAtUtc),
+            ("black", false) => query.OrderBy(x => x.Game.Black).ThenByDescending(x => x.Link.AddedAtUtc),
+            ("whiteelo", true) => query
+                .OrderBy(x => x.Game.WhiteElo == null ? 1 : 0)
+                .ThenByDescending(x => x.Game.WhiteElo)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("whiteelo", false) => query
+                .OrderBy(x => x.Game.WhiteElo == null ? 1 : 0)
+                .ThenBy(x => x.Game.WhiteElo)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("blackelo", true) => query
+                .OrderBy(x => x.Game.BlackElo == null ? 1 : 0)
+                .ThenByDescending(x => x.Game.BlackElo)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("blackelo", false) => query
+                .OrderBy(x => x.Game.BlackElo == null ? 1 : 0)
+                .ThenBy(x => x.Game.BlackElo)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("result", _) when normalizedResultSortMode == "whitefirst" => query
+                .OrderBy(x => x.Game.Result == "1-0" ? 0 : x.Game.Result == "0-1" ? 1 : x.Game.Result == "1/2-1/2" ? 2 : 3)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("result", _) when normalizedResultSortMode == "blackfirst" => query
+                .OrderBy(x => x.Game.Result == "0-1" ? 0 : x.Game.Result == "1-0" ? 1 : x.Game.Result == "1/2-1/2" ? 2 : 3)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("result", _) when normalizedResultSortMode == "drawfirst" => query
+                .OrderBy(x => x.Game.Result == "1/2-1/2" ? 0 : x.Game.Result == "1-0" ? 1 : x.Game.Result == "0-1" ? 2 : 3)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("result", _) => query.OrderByDescending(x => x.Link.AddedAtUtc).ThenByDescending(x => x.Game.Id),
+            ("eco", true) => query
+                .OrderBy(x => x.Game.ECO == null || x.Game.ECO == "" || x.Game.ECO == "?" ? 1 : 0)
+                .ThenByDescending(x => x.Game.ECO)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("eco", false) => query
+                .OrderBy(x => x.Game.ECO == null || x.Game.ECO == "" || x.Game.ECO == "?" ? 1 : 0)
+                .ThenBy(x => x.Game.ECO)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("event", true) => query
+                .OrderBy(x => x.Game.Event == null || x.Game.Event == "" || x.Game.Event == "?" || x.Game.Event == "-" ? 1 : 0)
+                .ThenByDescending(x => x.Game.Event)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("event", false) => query
+                .OrderBy(x => x.Game.Event == null || x.Game.Event == "" || x.Game.Event == "?" || x.Game.Event == "-" ? 1 : 0)
+                .ThenBy(x => x.Game.Event)
+                .ThenByDescending(x => x.Link.AddedAtUtc),
+            ("moves", true) => query.OrderByDescending(x => x.Game.MoveCount).ThenByDescending(x => x.Link.AddedAtUtc),
+            ("moves", false) => query.OrderBy(x => x.Game.MoveCount).ThenByDescending(x => x.Link.AddedAtUtc),
+            (_, false) => query.OrderBy(x => x.Link.AddedAtUtc).ThenBy(x => x.Game.Id),
+            _ => query.OrderByDescending(x => x.Link.AddedAtUtc).ThenByDescending(x => x.Game.Id)
+        };
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new DraftGameListItem(
+                x.Game.Id,
+                x.Game.Year,
+                x.Game.White,
+                x.Game.WhiteElo,
+                x.Game.Result,
+                x.Game.Black,
+                x.Game.BlackElo,
+                x.Game.ECO,
+                x.Game.Event,
+                x.Game.MoveCount,
+                x.Link.AddedAtUtc))
+            .ToListAsync(cancellationToken);
+
+        return Ok(new DraftGamesPageResponse(page, pageSize, totalCount, items));
+    }
+
     [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserDatabaseRequest request, CancellationToken cancellationToken)
@@ -199,8 +340,56 @@ public class UserDatabasesController(ChessXivDbContext dbContext) : ControllerBa
             return Forbid();
         }
 
-        dbContext.UserDatabases.Remove(entity);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var linkedGameIds = await dbContext.UserDatabaseGames
+            .AsNoTracking()
+            .Where(x => x.UserDatabaseId == id)
+            .Select(x => x.GameId)
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+
+        await dbContext.UserDatabaseGames
+            .Where(x => x.UserDatabaseId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await dbContext.UserDatabases
+            .Where(d => d.Id == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (linkedGameIds.Length > 0)
+        {
+            const int batchSize = 500;
+
+            for (var i = 0; i < linkedGameIds.Length; i += batchSize)
+            {
+                var batch = linkedGameIds
+                    .Skip(i)
+                    .Take(batchSize)
+                    .ToArray();
+
+                var orphanIds = await (
+                    from game in dbContext.Games.AsNoTracking()
+                    where batch.Contains(game.Id)
+                    join link in dbContext.UserDatabaseGames.AsNoTracking() on game.Id equals link.GameId into gameLinks
+                    from gameLink in gameLinks.DefaultIfEmpty()
+                    where gameLink == null
+                    select game.Id)
+                    .ToArrayAsync(cancellationToken);
+
+                if (orphanIds.Length == 0)
+                {
+                    continue;
+                }
+
+                await dbContext.Games
+                    .Where(g => orphanIds.Contains(g.Id))
+                    .ExecuteDeleteAsync(cancellationToken);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
         return NoContent();
     }
 

@@ -52,12 +52,16 @@
       [sortDirection]="draftGamesSortDirection()"
       [databaseName]="currentDatabaseName"
       [sourceType]="currentGamesSource"
+      [activeDatabaseId]="activeUserDatabaseId()"
       [myDatabases]="myDatabases()"
       [panelDatabases]="panelDatabases()"
       [currentUserName]="currentUserName() ?? ''"
       (importDatabase)="importDatabase()"
       (searchCommunityDatabase)="searchCommunityDatabase()"
       (saveDatabase)="saveCurrentDatabase()"
+      (openDatabase)="onDatabaseSelected($event)"
+      (deleteDatabase)="onDatabaseDeleteRequested($event)"
+      (closeDatabase)="closeCurrentDatabase()"
       (saveDatabaseRequest)="onSaveDatabaseRequest($event)"
       (addBookmark)="addCurrentDatabaseBookmark()"
       (gamesResultSortModeChange)="onDraftGamesResultSortModeChanged($event)"
@@ -80,7 +84,12 @@
       </div>
       <div class="tab-body fade-in">
         <div *ngIf="focusRightTab === 'databases'" class="full-height-child">
-          <app-databases-panel [databases]="panelDatabases()" [currentUser]="currentUserName() ?? ''" />
+          <app-databases-panel
+            [databases]="panelDatabases()"
+            [currentUser]="currentUserName() ?? ''"
+            [activeDatabaseId]="activeUserDatabaseId()"
+            (openDatabase)="onDatabaseSelected($event)"
+            (deleteDatabase)="onDatabaseDeleteRequested($event)" />
         </div>
         <app-games-tree *ngIf="focusRightTab === 'tree'" class="full-height-child" />
         <app-move-list
@@ -158,6 +167,29 @@
         <p class="save-status-success">Success</p>
         <button type="button" class="save-status-close" (click)="closeSaveDraftModal()">Close</button>
       }
+    </div>
+  </div>
+}
+
+@if (deleteConfirmationVisible()) {
+  <div class="import-progress-overlay" role="dialog" aria-modal="true" aria-label="Delete confirmation">
+    <div class="delete-confirm-card">
+      @if (deleteConfirmationKind() === 'draft') {
+        <h3>Delete Imported Draft?</h3>
+        <p>This will remove all currently imported draft games.</p>
+      } @else {
+        <h3>Delete Database?</h3>
+        <p>
+          This will permanently delete
+          <strong>{{ deleteConfirmationDatabaseName() }}</strong>
+          and its games.
+        </p>
+      }
+
+      <div class="delete-confirm-actions">
+        <button type="button" class="confirm-btn" (click)="cancelDeleteConfirmation()">Cancel</button>
+        <button type="button" class="confirm-btn danger" (click)="confirmDeleteConfirmation()">Delete</button>
+      </div>
     </div>
   </div>
 }

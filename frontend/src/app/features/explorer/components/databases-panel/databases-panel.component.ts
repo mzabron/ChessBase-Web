@@ -1,4 +1,4 @@
-import { Component, Input, computed, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -19,9 +19,12 @@ export interface Database {
 })
 export class DatabasesPanelComponent {
   @Input() currentUser = '';
+  @Input() activeDatabaseId: string | null = null;
   @Input() set databases(value: Database[]) {
     this.databasesSignal.set(value ?? []);
   }
+  @Output() openDatabase = new EventEmitter<Database>();
+  @Output() deleteDatabase = new EventEmitter<Database>();
 
   searchQuery = signal('');
   sortByCreationDesc = signal(true);

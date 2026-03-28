@@ -107,11 +107,48 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
+  &.active {
+    border-color: #c8ae88;
+    box-shadow: 0 0 0 1px #c8ae88;
+  }
+
   .db-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.5rem;
+
+    .db-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .delete-db-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.8rem;
+      height: 1.8rem;
+      border-radius: 999px;
+      border: 1px solid #e5a4a4;
+      background: #fde9e9;
+      color: #a12626;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+
+      .material-symbols-outlined {
+        font-size: 1.05rem;
+        line-height: 1;
+      }
+
+      &:hover {
+        background: #fbd7d7;
+        border-color: #dc8e8e;
+        color: #8f1d1d;
+      }
+    }
 
     .db-name {
       margin: 0;
@@ -165,4 +202,21 @@
   }
 
   .db-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+
+  .db-card.active {
+    border-color: #6f6f78;
+    box-shadow: 0 0 0 1px #6f6f78;
+  }
+
+  .delete-db-btn {
+    background: #3f2323;
+    border-color: #7a3a3a;
+    color: #f1b6b6;
+
+    &:hover {
+      background: #522d2d;
+      border-color: #8f4646;
+      color: #ffcaca;
+    }
+  }
 }

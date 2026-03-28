@@ -38,6 +38,8 @@ export class ExplorerPageComponent implements OnDestroy {
   private readonly draftImportProgress = inject(DraftImportProgressService);
 
   private readonly loadedForCurrentSession = signal(false);
+  protected readonly activeUserDatabaseId = signal<string | null>(null);
+  private static readonly activeDatabaseStorageKey = 'chessxiv.explorer.active-user-database';
   private progressSubscription: Subscription | null = null;
 
   @Input() isFocusMode = false;
@@ -55,6 +57,9 @@ export class ExplorerPageComponent implements OnDestroy {
   protected readonly importProgress = signal<DraftImportProgressUpdate | null>(null);
   protected readonly importError = signal<string | null>(null);
   protected readonly importErrorVisible = signal(false);
+  protected readonly deleteConfirmationVisible = signal(false);
+  protected readonly deleteConfirmationKind = signal<'draft' | 'database' | null>(null);
+  protected readonly deleteConfirmationDatabaseName = signal('');
   protected readonly draftGames = signal<DraftGameListItem[]>([]);
   protected readonly draftGamesTotalCount = signal(0);
   protected readonly draftGamesPage = signal(1);
@@ -63,7 +68,7 @@ export class ExplorerPageComponent implements OnDestroy {
   protected readonly draftGamesSortBy = signal<DraftGamesSortBy>('createdAt');
   protected readonly draftGamesSortDirection = signal<DraftGamesSortDirection>('desc');
   protected currentDatabaseName = 'Games';
-  protected currentGamesSource: 'imported' | 'external' = 'imported';
+  protected currentGamesSource: 'imported' | 'external' | 'userDatabase' = 'imported';
   protected readonly myDatabases = signal<Array<{ id: string; name: string }>>([]);
   protected readonly panelDatabases = signal<Database[]>([]);
   protected readonly currentUserName = this.authState.userName;
@@ -73,7 +78,7 @@ export class ExplorerPageComponent implements OnDestroy {
   private navigationVersion = 0;
   private importErrorTimerId: number | null = null;
   private importErrorClearTimerId: number | null = null;
-  private draftViewFrozenAfterSave = false;
+  private pendingDeleteDatabase: Database | null = null;
   protected mockGames: any[] = [
     {
       year: 2023,
@@ -126,6 +131,7 @@ export class ExplorerPageComponent implements OnDestroy {
         this.loadedForCurrentSession.set(false);
         this.myDatabases.set([]);
         this.panelDatabases.set([]);
+        this.activeUserDatabaseId.set(null);
         this.detachProgressSubscription();
         void this.draftImportProgress.disconnect();
         return;
@@ -191,9 +197,60 @@ export class ExplorerPageComponent implements OnDestroy {
   protected searchCommunityDatabase(): void {
     // Placeholder action for searching a remote community database.
     console.log('Search database (community database)');
+    this.activeUserDatabaseId.set(null);
+    this.clearPersistedActiveDatabase();
     this.gamesLoaded = true;
     this.currentDatabaseName = 'Community Database';
     this.currentGamesSource = 'external';
+  }
+
+  protected onDatabaseSelected(database: Database): void {
+    if (this.isFocusMode) {
+      this.focusRightTab = 'games';
+    }
+
+    void this.openUserDatabase(database);
+  }
+
+  protected closeCurrentDatabase(): void {
+    if (this.currentGamesSource === 'imported' && this.gamesLoaded) {
+      this.openDeleteConfirmation('draft');
+      return;
+    }
+
+    void this.handleCloseCurrentDatabase();
+  }
+
+  protected onDatabaseDeleteRequested(database: Database): void {
+    if (database.owner !== (this.currentUserName() ?? '')) {
+      return;
+    }
+
+    this.pendingDeleteDatabase = database;
+    this.deleteConfirmationDatabaseName.set(database.name);
+    this.openDeleteConfirmation('database');
+  }
+
+  protected cancelDeleteConfirmation(): void {
+    this.pendingDeleteDatabase = null;
+    this.deleteConfirmationVisible.set(false);
+    this.deleteConfirmationKind.set(null);
+    this.deleteConfirmationDatabaseName.set('');
+  }
+
+  protected confirmDeleteConfirmation(): void {
+    const kind = this.deleteConfirmationKind();
+    const pendingDatabase = this.pendingDeleteDatabase;
+    this.cancelDeleteConfirmation();
+
+    if (kind === 'draft') {
+      void this.handleCloseCurrentDatabase();
+      return;
+    }
+
+    if (kind === 'database' && pendingDatabase) {
+      void this.deleteDatabase(pendingDatabase);
+    }
   }
 
   protected saveCurrentDatabase(): void {
@@ -234,12 +291,20 @@ export class ExplorerPageComponent implements OnDestroy {
       }
 
       await firstValueFrom(this.draftImportApi.promoteDraft({ userDatabaseId }));
-      this.currentDatabaseName = payload.mode === 'create'
-        ? (payload.newDatabaseName ?? 'Imported Games')
-        : (this.myDatabases().find(db => db.id === userDatabaseId)?.name ?? 'Saved Database');
-      this.draftViewFrozenAfterSave = true;
-
       await this.reloadUserDatabases();
+
+      const selectedDatabase = this.panelDatabases().find(db => db.id === userDatabaseId)
+        ?? {
+          id: userDatabaseId,
+          name: payload.mode === 'create'
+            ? (payload.newDatabaseName ?? 'Imported Games')
+            : (this.myDatabases().find(db => db.id === userDatabaseId)?.name ?? 'Saved Database'),
+          owner: this.currentUserName() ?? '',
+          creationDate: new Date(),
+          gamesCount: 0
+        };
+
+      await this.openUserDatabase(selectedDatabase);
       this.saveDraftCompleted.set(true);
     } catch (error) {
       if (error instanceof HttpErrorResponse && payload.mode === 'create') {
@@ -278,10 +343,6 @@ export class ExplorerPageComponent implements OnDestroy {
   }
 
   protected onDraftGamesSortChanged(payload: { sortBy: DraftGamesSortBy; sortDirection: DraftGamesSortDirection }): void {
-    if (this.draftViewFrozenAfterSave) {
-      return;
-    }
-
     this.draftGamesSortBy.set(payload.sortBy);
     this.draftGamesSortDirection.set(payload.sortDirection);
 
@@ -290,36 +351,24 @@ export class ExplorerPageComponent implements OnDestroy {
     }
 
     this.draftGamesPage.set(1);
-    void this.loadDraftGamesPage();
+    void this.loadCurrentGamesPage();
   }
 
   protected onDraftGamesResultSortModeChanged(resultSortMode: DraftGamesResultSortMode): void {
-    if (this.draftViewFrozenAfterSave) {
-      return;
-    }
-
     this.draftGamesResultSortMode.set(resultSortMode);
     this.draftGamesPage.set(1);
-    void this.loadDraftGamesPage();
+    void this.loadCurrentGamesPage();
   }
 
   protected onDraftGamesPageSizeChanged(pageSize: number): void {
-    if (this.draftViewFrozenAfterSave) {
-      return;
-    }
-
     this.draftGamesPageSize.set(pageSize);
     this.draftGamesPage.set(1);
-    void this.loadDraftGamesPage();
+    void this.loadCurrentGamesPage();
   }
 
   protected onDraftGamesPageChanged(page: number): void {
-    if (this.draftViewFrozenAfterSave) {
-      return;
-    }
-
     this.draftGamesPage.set(page);
-    void this.loadDraftGamesPage();
+    void this.loadCurrentGamesPage();
   }
 
   protected async onPgnFileSelected(event: Event): Promise<void> {
@@ -382,12 +431,11 @@ export class ExplorerPageComponent implements OnDestroy {
   }
 
   private applyImportedDraftState(result: DraftImportResult): void {
-    this.draftViewFrozenAfterSave = false;
     this.gamesLoaded = result.importedCount > 0;
     this.currentDatabaseName = 'Imported Draft';
     this.currentGamesSource = 'imported';
     this.draftGamesPage.set(1);
-    void this.loadDraftGamesPage();
+    void this.loadCurrentGamesPage();
 
     if (!result.importedCount && result.skippedCount > 0) {
       this.showImportError('No games were imported. All parsed games were skipped.');
@@ -416,6 +464,46 @@ export class ExplorerPageComponent implements OnDestroy {
       this.gamesLoaded = response.totalCount > 0;
     } catch {
       this.showImportError('Unable to load imported draft games.');
+    }
+  }
+
+  private async loadUserDatabaseGamesPage(databaseId: string): Promise<void> {
+    try {
+      const response = await firstValueFrom(
+        this.userDatabasesApi.getGames(
+          databaseId,
+          this.draftGamesPage(),
+          this.draftGamesPageSize(),
+          this.draftGamesSortBy(),
+          this.draftGamesSortDirection(),
+          this.draftGamesResultSortMode()
+        )
+      );
+
+      this.draftGames.set(response.items);
+      this.draftGamesTotalCount.set(response.totalCount);
+      this.gamesLoaded = response.totalCount > 0;
+    } catch {
+      this.showImportError('Unable to load games from selected database.');
+    }
+  }
+
+  private async loadCurrentGamesPage(): Promise<void> {
+    if (this.currentGamesSource === 'userDatabase') {
+      const userDatabaseId = this.activeUserDatabaseId();
+      if (!userDatabaseId) {
+        this.gamesLoaded = false;
+        this.draftGames.set([]);
+        this.draftGamesTotalCount.set(0);
+        return;
+      }
+
+      await this.loadUserDatabaseGamesPage(userDatabaseId);
+      return;
+    }
+
+    if (this.currentGamesSource === 'imported') {
+      await this.loadDraftGamesPage();
     }
   }
 
@@ -472,7 +560,7 @@ export class ExplorerPageComponent implements OnDestroy {
           name: db.name,
           owner: this.currentUserName() ?? db.ownerUserId,
           creationDate: new Date(db.createdAtUtc),
-          gamesCount: db.gamesCount
+          gamesCount: db.gameCount
         }));
 
         const bookmarkMapped: Database[] = bookmarks
@@ -482,10 +570,12 @@ export class ExplorerPageComponent implements OnDestroy {
             name: bookmark.name,
             owner: bookmark.ownerUserId,
             creationDate: new Date(bookmark.createdAtUtc),
-            gamesCount: bookmark.gamesCount
+            gamesCount: bookmark.gameCount
           }));
 
-        this.panelDatabases.set([...mineMapped, ...bookmarkMapped]);
+        const allDatabases = [...mineMapped, ...bookmarkMapped];
+        this.panelDatabases.set(allDatabases);
+        void this.initializeGamesSourceForSession(allDatabases);
       },
       error: () => {
         this.loadedForCurrentSession.set(false);
@@ -507,7 +597,7 @@ export class ExplorerPageComponent implements OnDestroy {
         name: db.name,
         owner: this.currentUserName() ?? db.ownerUserId,
         creationDate: new Date(db.createdAtUtc),
-        gamesCount: db.gamesCount
+        gamesCount: db.gameCount
       }));
 
       const bookmarkMapped: Database[] = bookmarks
@@ -517,13 +607,159 @@ export class ExplorerPageComponent implements OnDestroy {
           name: bookmark.name,
           owner: bookmark.ownerUserId,
           creationDate: new Date(bookmark.createdAtUtc),
-          gamesCount: bookmark.gamesCount
+          gamesCount: bookmark.gameCount
         }));
 
       this.panelDatabases.set([...mineMapped, ...bookmarkMapped]);
     } catch {
       this.showImportError('Unable to refresh user databases after save.');
     }
+  }
+
+  private async openUserDatabase(database: Database): Promise<void> {
+    this.clearImportError();
+    this.activeUserDatabaseId.set(database.id);
+    this.currentDatabaseName = database.name;
+    this.currentGamesSource = 'userDatabase';
+    this.draftGamesPage.set(1);
+    this.persistActiveDatabase(database);
+    await this.loadCurrentGamesPage();
+  }
+
+  private async initializeGamesSourceForSession(availableDatabases: Database[]): Promise<void> {
+    const restored = await this.tryRestorePersistedActiveDatabase(availableDatabases);
+    if (restored) {
+      return;
+    }
+
+    await this.restoreImportedDraftIfAny();
+  }
+
+  private async tryRestorePersistedActiveDatabase(availableDatabases: Database[]): Promise<boolean> {
+    const persisted = this.readPersistedActiveDatabase();
+    if (!persisted) {
+      return false;
+    }
+
+    const currentUserId = this.authState.currentUser()?.userId;
+    if (!currentUserId || persisted.userId !== currentUserId) {
+      return false;
+    }
+
+    const matched = availableDatabases.find(db => db.id === persisted.databaseId);
+    if (!matched) {
+      this.clearPersistedActiveDatabase();
+      return false;
+    }
+
+    await this.openUserDatabase(matched);
+    return true;
+  }
+
+  private async restoreImportedDraftIfAny(): Promise<void> {
+    this.currentGamesSource = 'imported';
+    this.currentDatabaseName = 'Imported Draft';
+    this.draftGamesPage.set(1);
+    await this.loadCurrentGamesPage();
+
+    if (!this.gamesLoaded) {
+      this.currentDatabaseName = 'Games';
+    }
+  }
+
+  private async handleCloseCurrentDatabase(): Promise<void> {
+    const clearImportedDraft = this.currentGamesSource === 'imported';
+    this.resetCurrentGamesView();
+
+    if (clearImportedDraft) {
+      try {
+        await firstValueFrom(this.draftImportApi.clearDraftGames());
+      } catch {
+        this.showImportError('Unable to clear imported draft games.');
+      }
+    }
+  }
+
+  private resetCurrentGamesView(): void {
+    this.activeUserDatabaseId.set(null);
+    this.clearPersistedActiveDatabase();
+    this.currentDatabaseName = 'Games';
+    this.currentGamesSource = 'imported';
+    this.draftGames.set([]);
+    this.draftGamesTotalCount.set(0);
+    this.draftGamesPage.set(1);
+    this.gamesLoaded = false;
+  }
+
+  private async deleteDatabase(database: Database): Promise<void> {
+    const previousPanelDatabases = this.panelDatabases();
+    const previousMyDatabases = this.myDatabases();
+    const deletingActive = this.activeUserDatabaseId() === database.id;
+
+    this.panelDatabases.set(previousPanelDatabases.filter(db => db.id !== database.id));
+    this.myDatabases.set(previousMyDatabases.filter(db => db.id !== database.id));
+
+    if (deletingActive) {
+      this.resetCurrentGamesView();
+    }
+
+    try {
+      await firstValueFrom(this.userDatabasesApi.delete(database.id));
+      await this.reloadUserDatabases();
+    } catch {
+      this.panelDatabases.set(previousPanelDatabases);
+      this.myDatabases.set(previousMyDatabases);
+
+      if (deletingActive) {
+        void this.openUserDatabase(database);
+      }
+
+      this.showImportError('Unable to delete database. Please try again.');
+    }
+  }
+
+  private openDeleteConfirmation(kind: 'draft' | 'database'): void {
+    this.deleteConfirmationKind.set(kind);
+    this.deleteConfirmationVisible.set(true);
+  }
+
+  private persistActiveDatabase(database: Database): void {
+    const currentUserId = this.authState.currentUser()?.userId;
+    if (!currentUserId) {
+      return;
+    }
+
+    const payload = {
+      userId: currentUserId,
+      databaseId: database.id
+    };
+
+    localStorage.setItem(ExplorerPageComponent.activeDatabaseStorageKey, JSON.stringify(payload));
+  }
+
+  private readPersistedActiveDatabase(): { userId: string; databaseId: string } | null {
+    const raw = localStorage.getItem(ExplorerPageComponent.activeDatabaseStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as { userId?: unknown; databaseId?: unknown };
+      if (typeof parsed.userId !== 'string' || typeof parsed.databaseId !== 'string') {
+        return null;
+      }
+
+      return {
+        userId: parsed.userId,
+        databaseId: parsed.databaseId
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private clearPersistedActiveDatabase(): void {
+    localStorage.removeItem(ExplorerPageComponent.activeDatabaseStorageKey);
   }
 
   private showImportError(message: string): void {

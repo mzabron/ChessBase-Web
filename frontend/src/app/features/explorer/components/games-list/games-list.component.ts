@@ -35,7 +35,8 @@ export class GamesListComponent {
   @Input() sortBy: DraftGamesSortBy = 'createdAt';
   @Input() sortDirection: DraftGamesSortDirection = 'desc';
   @Input() databaseName = 'Games';
-  @Input() sourceType: 'imported' | 'external' = 'imported';
+  @Input() sourceType: 'imported' | 'external' | 'userDatabase' = 'imported';
+  @Input() activeDatabaseId: string | null = null;
   @Input() myDatabases: UserDatabaseOption[] = [];
   @Input() panelDatabases: Database[] = [];
   @Input() currentUserName = '';
@@ -51,6 +52,9 @@ export class GamesListComponent {
   @Output() searchCommunityDatabase = new EventEmitter<void>();
   @Output() saveDatabase = new EventEmitter<void>();
   @Output() addBookmark = new EventEmitter<void>();
+  @Output() openDatabase = new EventEmitter<Database>();
+  @Output() deleteDatabase = new EventEmitter<Database>();
+  @Output() closeDatabase = new EventEmitter<void>();
   @Output() saveDatabaseRequest = new EventEmitter<SaveDatabaseRequestPayload>();
   @Output() gamesResultSortModeChange = new EventEmitter<DraftGamesResultSortMode>();
   @Output() gamesSortChange = new EventEmitter<{ sortBy: DraftGamesSortBy; sortDirection: DraftGamesSortDirection }>();

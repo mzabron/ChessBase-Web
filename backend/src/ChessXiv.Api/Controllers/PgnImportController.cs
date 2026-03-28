@@ -252,6 +252,23 @@ public class PgnImportController(
         return Ok(new DraftGamesPageResponse(page, pageSize, totalCount, items));
     }
 
+    [Authorize]
+    [HttpDelete("drafts")]
+    public async Task<IActionResult> ClearDraftGames(CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var deletedCount = await dbContext.StagingGames
+            .Where(g => g.OwnerUserId == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        return Ok(new { deletedCount });
+    }
+
     private string? GetCurrentUserId()
     {
         return User.FindFirstValue(ClaimTypes.NameIdentifier)

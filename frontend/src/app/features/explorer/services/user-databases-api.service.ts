@@ -1,13 +1,19 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import {
+  DraftGamesPageResponse,
+  DraftGamesResultSortMode,
+  DraftGamesSortBy,
+  DraftGamesSortDirection
+} from './draft-import-api.service';
 
 export interface UserDatabaseDto {
   id: string;
   name: string;
   isPublic: boolean;
   ownerUserId: string;
-  gamesCount: number;
+  gameCount: number;
   createdAtUtc: string;
 }
 
@@ -35,6 +41,29 @@ export class UserDatabasesApiService {
 
   create(request: CreateUserDatabaseRequest): Observable<UserDatabaseDto> {
     return this.http.post<UserDatabaseDto>(`${this.baseUrl}/user-databases`, request);
+  }
+
+  delete(userDatabaseId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/user-databases/${userDatabaseId}`);
+  }
+
+  getGames(
+    userDatabaseId: string,
+    page: number,
+    pageSize: number,
+    sortBy: DraftGamesSortBy,
+    sortDirection: DraftGamesSortDirection,
+    resultSortMode: DraftGamesResultSortMode
+  ): Observable<DraftGamesPageResponse> {
+    return this.http.get<DraftGamesPageResponse>(`${this.baseUrl}/user-databases/${userDatabaseId}/games`, {
+      params: {
+        page,
+        pageSize,
+        sortBy,
+        sortDirection,
+        resultSortMode
+      }
+    });
   }
 
   private resolveBaseUrl(): string {

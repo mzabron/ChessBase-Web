@@ -64,7 +64,8 @@ public class ChessXivDbContext : IdentityDbContext<ApplicationUser>
             entity
                 .HasOne(p => p.Game)
                 .WithMany(g => g.Positions)
-                .HasForeignKey(p => p.GameId);
+                .HasForeignKey(p => p.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
 
         });
 

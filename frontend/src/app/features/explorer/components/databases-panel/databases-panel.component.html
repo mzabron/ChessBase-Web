@@ -13,10 +13,22 @@
 
   <div class="databases-list">
     @for (db of filteredAndSortedDatabases(); track db.id) {
-    <div class="db-card">
+    <div class="db-card" [class.active]="activeDatabaseId === db.id" (click)="openDatabase.emit(db)">
       <div class="db-header">
         <h3 class="db-name">{{ db.name }}</h3>
-        <span class="db-games-count">{{ db.gamesCount }} games</span>
+        <div class="db-actions">
+          <span class="db-games-count">{{ db.gamesCount }} games</span>
+          @if (db.owner === currentUser) {
+            <button
+              type="button"
+              class="delete-db-btn"
+              (click)="$event.stopPropagation(); deleteDatabase.emit(db)"
+              aria-label="Delete database"
+              title="Delete database">
+              <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+            </button>
+          }
+        </div>
       </div>
       <div class="db-meta">
         <span class="db-owner"><i class="icon-user"></i> {{ db.owner }}</span>

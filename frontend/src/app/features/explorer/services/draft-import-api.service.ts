@@ -86,6 +86,10 @@ export class DraftImportApiService {
     });
   }
 
+  clearDraftGames(): Observable<{ deletedCount: number }> {
+    return this.http.delete<{ deletedCount: number }>(`${this.baseUrl}/drafts`);
+  }
+
   private resolveBaseUrl(): string {
     const host = window.location.hostname;
     const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';

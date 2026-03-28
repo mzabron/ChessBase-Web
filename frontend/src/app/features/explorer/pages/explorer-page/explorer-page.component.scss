@@ -321,6 +321,49 @@
   cursor: pointer;
 }
 
+.delete-confirm-card {
+  width: min(360px, calc(100vw - 2rem));
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 24px 48px rgba(29, 24, 18, 0.24);
+  padding: 1rem;
+}
+
+.delete-confirm-card h3 {
+  margin: 0;
+  font: 700 1rem/1.2 'Space Grotesk', 'Segoe UI', sans-serif;
+}
+
+.delete-confirm-card p {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.delete-confirm-actions {
+  margin-top: 0.95rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.confirm-btn {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eee3cf;
+  color: #4a3828;
+  padding: 0.45rem 0.8rem;
+  font: 600 0.78rem/1 'Space Grotesk', 'Segoe UI', sans-serif;
+  cursor: pointer;
+
+  &.danger {
+    border-color: #d79f9f;
+    background: #fbe8e8;
+    color: #8d2222;
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -342,4 +385,16 @@
   background: #27272a;
   color: var(--text);
   border-color: var(--line);
+}
+
+:host-context(body.dark-theme) .confirm-btn {
+  background: #27272a;
+  color: var(--text);
+  border-color: var(--line);
+}
+
+:host-context(body.dark-theme) .confirm-btn.danger {
+  background: #3f2323;
+  color: #ffd0d0;
+  border-color: #7a3f3f;
 }

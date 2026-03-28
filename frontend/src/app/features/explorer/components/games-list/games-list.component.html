@@ -16,7 +16,12 @@
 
   @if (activeTab === 'databases') {
   <div class="tab-body" role="tabpanel" aria-label="Databases tab content">
-    <app-databases-panel [databases]="panelDatabases" [currentUser]="currentUserName" />
+    <app-databases-panel
+      [databases]="panelDatabases"
+      [currentUser]="currentUserName"
+      [activeDatabaseId]="activeDatabaseId"
+      (openDatabase)="selectTab('games'); openDatabase.emit($event)"
+      (deleteDatabase)="deleteDatabase.emit($event)" />
   </div>
   } @else if (activeTab === 'games') {
   <div class="tab-body" role="tabpanel" aria-label="Games tab content">
@@ -29,8 +34,13 @@
         <div class="db-summary-actions">
           @if (sourceType === 'imported') {
             <button type="button" class="summary-btn" (click)="openSaveDatabaseModal()">Save to database</button>
-          } @else {
+            <button type="button" class="summary-btn" (click)="closeDatabase.emit()">Close</button>
+          } @else if (sourceType === 'external') {
             <button type="button" class="summary-btn" (click)="addBookmark.emit()">Add bookmark</button>
+          }
+
+          @if (sourceType === 'userDatabase') {
+            <button type="button" class="summary-btn" (click)="closeDatabase.emit()">Close</button>
           }
         </div>
       </header>
