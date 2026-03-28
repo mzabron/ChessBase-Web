@@ -271,6 +271,35 @@ public class GameExplorerServiceTests
         Assert.Equal(0m, result.Moves[0].BlackWinPct);
     }
 
+    [Fact]
+    public async Task GetMoveTreeAsync_NormalizesMoveTreeFilters_AndForwardsFilterFenHash()
+    {
+        const string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+        var explorerRepository = new FakeGameExplorerRepository();
+        var serializer = new FakeBoardStateSerializer();
+        var hasher = new FakePositionHasher { HashToReturn = 77UL };
+        var service = new GameExplorerService(explorerRepository, serializer, hasher);
+
+        await service.GetMoveTreeAsync(new MoveTreeRequest
+        {
+            Fen = fen,
+            WhiteFirstName = "  MAGNUS ",
+            WhiteLastName = " CARLSEN ",
+            BlackFirstName = " ian ",
+            SearchByPosition = true,
+            FilterFen = fen,
+            PositionMode = PositionSearchMode.SamePosition,
+            Source = MoveTreeSource.StagingSession
+        }, "user-1");
+
+        Assert.Equal("magnus", explorerRepository.LastMoveTreeWhiteFirstName);
+        Assert.Equal("carlsen", explorerRepository.LastMoveTreeWhiteLastName);
+        Assert.Equal("ian", explorerRepository.LastMoveTreeBlackFirstName);
+        Assert.Equal(fen, explorerRepository.LastMoveTreeNormalizedFilterFen);
+        Assert.Equal(unchecked((long)77UL), explorerRepository.LastMoveTreeFilterFenHash);
+    }
+
     private sealed class FakeGameExplorerRepository : IGameExplorerRepository
     {
         public int CallCount { get; private set; }
@@ -285,8 +314,14 @@ public class GameExplorerServiceTests
         public UserDatabaseAccessStatus AccessStatus { get; set; } = UserDatabaseAccessStatus.Accessible;
         public MoveTreeRequest? LastMoveTreeRequest { get; private set; }
         public string? LastMoveTreeOwnerUserId { get; private set; }
+        public string? LastMoveTreeWhiteFirstName { get; private set; }
+        public string? LastMoveTreeWhiteLastName { get; private set; }
+        public string? LastMoveTreeBlackFirstName { get; private set; }
+        public string? LastMoveTreeBlackLastName { get; private set; }
         public string? LastMoveTreeNormalizedFen { get; private set; }
         public long? LastMoveTreeFenHash { get; private set; }
+        public string? LastMoveTreeNormalizedFilterFen { get; private set; }
+        public long? LastMoveTreeFilterFenHash { get; private set; }
 
         public Task<UserDatabaseAccessStatus> GetUserDatabaseAccessStatusAsync(
             Guid userDatabaseId,
@@ -320,14 +355,26 @@ public class GameExplorerServiceTests
         public Task<MoveTreeResponse> GetMoveTreeAsync(
             MoveTreeRequest request,
             string ownerUserId,
+            string? normalizedWhiteFirstName,
+            string? normalizedWhiteLastName,
+            string? normalizedBlackFirstName,
+            string? normalizedBlackLastName,
             string normalizedFen,
             long fenHash,
+            string? normalizedFilterFen,
+            long? filterFenHash,
             CancellationToken cancellationToken = default)
         {
             LastMoveTreeRequest = request;
             LastMoveTreeOwnerUserId = ownerUserId;
+            LastMoveTreeWhiteFirstName = normalizedWhiteFirstName;
+            LastMoveTreeWhiteLastName = normalizedWhiteLastName;
+            LastMoveTreeBlackFirstName = normalizedBlackFirstName;
+            LastMoveTreeBlackLastName = normalizedBlackLastName;
             LastMoveTreeNormalizedFen = normalizedFen;
             LastMoveTreeFenHash = fenHash;
+            LastMoveTreeNormalizedFilterFen = normalizedFilterFen;
+            LastMoveTreeFilterFenHash = filterFenHash;
             return Task.FromResult(MoveTreeResponse);
         }
     }

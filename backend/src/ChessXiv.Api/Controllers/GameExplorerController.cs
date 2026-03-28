@@ -70,6 +70,16 @@ public class GameExplorerController(
             return BadRequest("FEN is required.");
         }
 
+        if (!Enum.IsDefined(request.EloMode))
+        {
+            return BadRequest("Invalid eloMode value.");
+        }
+
+        if (!Enum.IsDefined(request.PositionMode))
+        {
+            return BadRequest("Invalid positionMode value.");
+        }
+
         if (request.Source == MoveTreeSource.UserDatabase && (!request.UserDatabaseId.HasValue || request.UserDatabaseId == Guid.Empty))
         {
             return BadRequest("User database id is required for user database move tree.");

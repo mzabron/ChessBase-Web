@@ -4,8 +4,9 @@ import { Observable } from 'rxjs';
 
 export interface PositionMoveRequest {
   fen: string;
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
+  san?: string;
   promotion?: string | null;
 }
 
@@ -16,6 +17,48 @@ export interface PositionMoveResponse {
   error?: string | null;
 }
 
+export interface ExplorerMoveTreeRequest {
+  fen: string;
+  source: number;
+  userDatabaseId?: string;
+  maxMoves?: number;
+  whiteFirstName?: string;
+  whiteLastName?: string;
+  blackFirstName?: string;
+  blackLastName?: string;
+  ignoreColors?: boolean;
+  eloEnabled?: boolean;
+  eloFrom?: number;
+  eloTo?: number;
+  eloMode?: number;
+  yearEnabled?: boolean;
+  yearFrom?: number;
+  yearTo?: number;
+  ecoCode?: string;
+  result?: string;
+  moveCountFrom?: number;
+  moveCountTo?: number;
+  searchByPosition?: boolean;
+  filterFen?: string;
+  positionMode?: number;
+}
+
+export interface ExplorerMoveTreeMoveDto {
+  moveSan: string;
+  games: number;
+  whiteWins: number;
+  draws: number;
+  blackWins: number;
+  whiteWinPct: number;
+  drawPct: number;
+  blackWinPct: number;
+}
+
+export interface ExplorerMoveTreeResponse {
+  totalGamesInPosition: number;
+  moves: ExplorerMoveTreeMoveDto[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ExplorerBoardApiService {
   private readonly http = inject(HttpClient);
@@ -23,6 +66,10 @@ export class ExplorerBoardApiService {
 
   applyMove(request: PositionMoveRequest): Observable<PositionMoveResponse> {
     return this.http.post<PositionMoveResponse>(`${this.baseUrl}/position/move`, request);
+  }
+
+  getMoveTree(request: ExplorerMoveTreeRequest): Observable<ExplorerMoveTreeResponse> {
+    return this.http.post<ExplorerMoveTreeResponse>(`${this.baseUrl}/move-tree`, request);
   }
 
   private resolveBaseUrl(): string {

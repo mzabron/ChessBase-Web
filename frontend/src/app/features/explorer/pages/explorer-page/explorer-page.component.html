@@ -19,6 +19,7 @@
       <app-chessboard
         #mainChessboard
         [navigationRequest]="navigationRequest"
+        [sanMoveRequest]="boardSanMoveRequest()"
         [replayData]="selectedGameReplay()"
         (moveRowsChanged)="onMoveRowsChanged($event)"
         (currentPlyChanged)="onCurrentPlyChanged($event)"
@@ -36,13 +37,21 @@
       *ngIf="isFocusMode"
       class="full-size-board"
       [navigationRequest]="navigationRequest"
+      [sanMoveRequest]="boardSanMoveRequest()"
       [replayData]="selectedGameReplay()"
       (moveRowsChanged)="onMoveRowsChanged($event)"
       (currentPlyChanged)="onCurrentPlyChanged($event)"
       (currentFenChanged)="onBoardFenChanged($event)" />
 
     <!-- Default Mode Tree -->
-    <app-games-tree *ngIf="!isFocusMode" />
+    <app-games-tree
+      *ngIf="!isFocusMode"
+      [sourceType]="currentGamesSource"
+      [gamesLoaded]="gamesLoaded || currentGamesSource === 'userDatabase'"
+      [loading]="moveTreeLoading()"
+      [error]="moveTreeError()"
+      [moveTree]="moveTreeData()"
+      (moveSelected)="onTreeMoveSelected($event)" />
   </section>
 
   <div class="resize-handle" role="separator" aria-label="Resize board and games list panels"
@@ -108,7 +117,15 @@
             (openDatabase)="onDatabaseSelected($event)"
             (deleteDatabase)="onDatabaseDeleteRequested($event)" />
         </div>
-        <app-games-tree *ngIf="focusRightTab === 'tree'" class="full-height-child" />
+        <app-games-tree
+          *ngIf="focusRightTab === 'tree'"
+          class="full-height-child"
+          [sourceType]="currentGamesSource"
+          [gamesLoaded]="gamesLoaded || currentGamesSource === 'userDatabase'"
+          [loading]="moveTreeLoading()"
+          [error]="moveTreeError()"
+          [moveTree]="moveTreeData()"
+          (moveSelected)="onTreeMoveSelected($event)" />
         <app-move-list
           *ngIf="focusRightTab === 'moves'"
           class="full-height-child"

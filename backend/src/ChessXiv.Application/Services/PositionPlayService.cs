@@ -19,9 +19,45 @@ public sealed class PositionPlayService(
             return Invalid("FEN is required.");
         }
 
-        if (!TryParseSquare(request.From, out var fromSquare) || !TryParseSquare(request.To, out var toSquare))
+        Square fromSquare;
+        Square toSquare;
+
+        var trimmedFen = request.Fen.Trim();
+
+        BoardState state;
+        try
         {
-            return Invalid("Move squares must be in algebraic coordinate format (for example: e2, e4).");
+            state = boardStateSerializer.FromFen(trimmedFen);
+        }
+        catch (FormatException)
+        {
+            return Invalid("Invalid FEN.");
+        }
+        catch (ArgumentException)
+        {
+            return Invalid("Invalid FEN.");
+        }
+
+        var sanInput = request.San?.Trim();
+        if (!string.IsNullOrWhiteSpace(sanInput))
+        {
+            if (!boardStateTransition.TryApplySan(state, sanInput))
+            {
+                return Invalid("Illegal move for current position.");
+            }
+
+            return new PositionMoveResponse
+            {
+                IsValid = true,
+                Fen = boardStateSerializer.ToFen(state),
+                San = sanInput
+            };
+        }
+
+        if (!TryParseSquare(request.From ?? string.Empty, out fromSquare)
+            || !TryParseSquare(request.To ?? string.Empty, out toSquare))
+        {
+            return Invalid("Move squares must be in algebraic coordinate format (for example: e2, e4). You can also send SAN (for example: Nf3).");
         }
 
         if (fromSquare.Index == toSquare.Index)
@@ -33,20 +69,6 @@ public sealed class PositionPlayService(
         if (!string.IsNullOrWhiteSpace(request.Promotion) && promotion is null)
         {
             return Invalid("Promotion must be one of: q, r, b, n.");
-        }
-
-        BoardState state;
-        try
-        {
-            state = boardStateSerializer.FromFen(request.Fen.Trim());
-        }
-        catch (FormatException)
-        {
-            return Invalid("Invalid FEN.");
-        }
-        catch (ArgumentException)
-        {
-            return Invalid("Invalid FEN.");
         }
 
         var movingPiece = GetPieceAt(state, fromSquare);
@@ -65,19 +87,19 @@ public sealed class PositionPlayService(
             promotion = PieceType.Queen;
         }
 
-        foreach (var san in BuildSanCandidates(movingPiece, fromSquare, toSquare, promotion))
+        foreach (var sanCandidate in BuildSanCandidates(movingPiece, fromSquare, toSquare, promotion))
         {
             BoardState candidate;
             try
             {
-                candidate = boardStateSerializer.FromFen(request.Fen.Trim());
+                candidate = boardStateSerializer.FromFen(trimmedFen);
             }
             catch
             {
                 return Invalid("Invalid FEN.");
             }
 
-            if (!boardStateTransition.TryApplySan(candidate, san))
+            if (!boardStateTransition.TryApplySan(candidate, sanCandidate))
             {
                 continue;
             }
@@ -91,7 +113,7 @@ public sealed class PositionPlayService(
             {
                 IsValid = true,
                 Fen = boardStateSerializer.ToFen(candidate),
-                San = san
+                San = sanCandidate
             };
         }
 

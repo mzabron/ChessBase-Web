@@ -120,8 +120,14 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
     public Task<MoveTreeResponse> GetMoveTreeAsync(
         MoveTreeRequest request,
         string ownerUserId,
+        string? normalizedWhiteFirstName,
+        string? normalizedWhiteLastName,
+        string? normalizedBlackFirstName,
+        string? normalizedBlackLastName,
         string normalizedFen,
         long fenHash,
+        string? normalizedFilterFen,
+        long? filterFenHash,
         CancellationToken cancellationToken = default)
     {
         return request.Source switch
@@ -129,14 +135,26 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
             MoveTreeSource.UserDatabase => GetUserDatabaseMoveTreeAsync(
                 request,
                 ownerUserId,
+                normalizedWhiteFirstName,
+                normalizedWhiteLastName,
+                normalizedBlackFirstName,
+                normalizedBlackLastName,
                 normalizedFen,
                 fenHash,
+                normalizedFilterFen,
+                filterFenHash,
                 cancellationToken),
             MoveTreeSource.StagingSession => GetStagingMoveTreeAsync(
                 request,
                 ownerUserId,
+                normalizedWhiteFirstName,
+                normalizedWhiteLastName,
+                normalizedBlackFirstName,
+                normalizedBlackLastName,
                 normalizedFen,
                 fenHash,
+                normalizedFilterFen,
+                filterFenHash,
                 cancellationToken),
             _ => Task.FromResult(new MoveTreeResponse())
         };
@@ -145,8 +163,14 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
     private async Task<MoveTreeResponse> GetUserDatabaseMoveTreeAsync(
         MoveTreeRequest request,
         string ownerUserId,
+        string? normalizedWhiteFirstName,
+        string? normalizedWhiteLastName,
+        string? normalizedBlackFirstName,
+        string? normalizedBlackLastName,
         string normalizedFen,
         long fenHash,
+        string? normalizedFilterFen,
+        long? filterFenHash,
         CancellationToken cancellationToken)
     {
         if (!request.UserDatabaseId.HasValue || request.UserDatabaseId == Guid.Empty)
@@ -164,14 +188,38 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
             return new MoveTreeResponse();
         }
 
+        var filteredGames = dbContext.UserDatabaseGames
+            .AsNoTracking()
+            .Where(link => link.UserDatabaseId == userDatabaseId)
+            .ApplyPlayerFilters(
+                request.IgnoreColors,
+                normalizedWhiteFirstName,
+                normalizedWhiteLastName,
+                normalizedBlackFirstName,
+                normalizedBlackLastName)
+            .ApplyScalarFilters(
+                request.EloEnabled,
+                request.EloFrom,
+                request.EloTo,
+                request.EloMode,
+                request.YearEnabled,
+                request.YearFrom,
+                request.YearTo,
+                request.EcoCode,
+                request.Result,
+                request.MoveCountFrom,
+                request.MoveCountTo)
+            .ApplyPositionFilters(request.SearchByPosition, normalizedFilterFen, filterFenHash, request.PositionMode);
+
         var parentPositions =
-            from link in dbContext.UserDatabaseGames.AsNoTracking()
+            from link in filteredGames
             join parent in dbContext.Positions.AsNoTracking() on link.GameId equals parent.GameId
-            where link.UserDatabaseId == userDatabaseId && parent.FenHash == fenHash && parent.Fen == normalizedFen
+            where parent.FenHash == fenHash && parent.Fen == normalizedFen
             select new
             {
                 parent.GameId,
-                parent.PlyCount
+                parent.PlyCount,
+                link.Game.Result
             };
 
         var totalGamesInPosition = await parentPositions
@@ -184,13 +232,12 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
             join child in dbContext.Positions.AsNoTracking()
                 on new { parent.GameId, NextPly = parent.PlyCount + 1 }
                 equals new { child.GameId, NextPly = child.PlyCount }
-            join game in dbContext.Games.AsNoTracking() on parent.GameId equals game.Id
             where child.LastMove != null && child.LastMove != string.Empty
             select new
             {
                 parent.GameId,
                 MoveSan = child.LastMove!,
-                game.Result
+                parent.Result
             })
             .Distinct()
             .GroupBy(x => x.MoveSan)
@@ -219,20 +266,49 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
     private async Task<MoveTreeResponse> GetStagingMoveTreeAsync(
         MoveTreeRequest request,
         string ownerUserId,
+        string? normalizedWhiteFirstName,
+        string? normalizedWhiteLastName,
+        string? normalizedBlackFirstName,
+        string? normalizedBlackLastName,
         string normalizedFen,
         long fenHash,
+        string? normalizedFilterFen,
+        long? filterFenHash,
         CancellationToken cancellationToken)
     {
+        var filteredGames = dbContext.StagingGames
+            .AsNoTracking()
+            .Where(game => game.OwnerUserId == ownerUserId)
+            .ApplyPlayerFilters(
+                request.IgnoreColors,
+                normalizedWhiteFirstName,
+                normalizedWhiteLastName,
+                normalizedBlackFirstName,
+                normalizedBlackLastName)
+            .ApplyScalarFilters(
+                request.EloEnabled,
+                request.EloFrom,
+                request.EloTo,
+                request.EloMode,
+                request.YearEnabled,
+                request.YearFrom,
+                request.YearTo,
+                request.EcoCode,
+                request.Result,
+                request.MoveCountFrom,
+                request.MoveCountTo)
+            .ApplyPositionFilters(request.SearchByPosition, normalizedFilterFen, filterFenHash, request.PositionMode);
+
         var parentPositions =
-            from game in dbContext.StagingGames.AsNoTracking()
+            from game in filteredGames
             join parent in dbContext.StagingPositions.AsNoTracking() on game.Id equals parent.StagingGameId
-            where game.OwnerUserId == ownerUserId
-                  && parent.FenHash == fenHash
+            where parent.FenHash == fenHash
                   && parent.Fen == normalizedFen
             select new
             {
                 parent.StagingGameId,
-                parent.PlyCount
+                parent.PlyCount,
+                game.Result
             };
 
         var totalGamesInPosition = await parentPositions
@@ -245,13 +321,12 @@ public class GameExplorerRepository(ChessXivDbContext dbContext) : IGameExplorer
             join child in dbContext.StagingPositions.AsNoTracking()
                 on new { StagingGameId = parent.StagingGameId, NextPly = parent.PlyCount + 1 }
                 equals new { child.StagingGameId, NextPly = child.PlyCount }
-            join game in dbContext.StagingGames.AsNoTracking() on parent.StagingGameId equals game.Id
             where child.LastMove != null && child.LastMove != string.Empty
             select new
             {
                 parent.StagingGameId,
                 MoveSan = child.LastMove!,
-                game.Result
+                parent.Result
             })
             .Distinct()
             .GroupBy(x => x.MoveSan)

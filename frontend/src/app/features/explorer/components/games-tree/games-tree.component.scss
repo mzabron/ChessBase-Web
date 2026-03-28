@@ -32,7 +32,7 @@
 
 .tree-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto auto auto;
   gap: 0.5rem;
   align-items: center;
   border: 1px solid #dfd2bc;
@@ -44,6 +44,15 @@
 .move {
   font: 600 0.8rem/1 'Space Grotesk', 'Segoe UI', sans-serif;
   color: #342518;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.move:hover {
+  text-decoration: underline;
 }
 
 .meta {
@@ -51,8 +60,42 @@
   color: #6f604e;
 }
 
+.split {
+  min-width: 3.4rem;
+  text-align: right;
+}
+
+.tree-caption {
+  margin: 0;
+  padding: 0 0.85rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.tree-status {
+  margin: 0;
+  padding: 0 0.85rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.tree-status-error {
+  color: #9a2f2f;
+}
+
+@media (max-width: 1120px) {
+  .tree-item {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .split {
+    min-width: auto;
+  }
+}
+
 :host-context(body.dark-theme) {
   .tree-item { border-color: var(--line); background: var(--bg); }
   .move { color: var(--text); }
   .meta { color: var(--muted); }
+  .tree-status-error { color: #ff9e9e; }
 }

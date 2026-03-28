@@ -23,7 +23,13 @@ public interface IGameExplorerRepository
     Task<MoveTreeResponse> GetMoveTreeAsync(
         MoveTreeRequest request,
         string ownerUserId,
+        string? normalizedWhiteFirstName,
+        string? normalizedWhiteLastName,
+        string? normalizedBlackFirstName,
+        string? normalizedBlackLastName,
         string normalizedFen,
         long fenHash,
+        string? normalizedFilterFen,
+        long? filterFenHash,
         CancellationToken cancellationToken = default);
 }

@@ -68,6 +68,7 @@ export class ChessboardComponent implements OnChanges {
   ];
 
   @Input() navigationRequest: { ply: number; version: number } | null = null;
+  @Input() sanMoveRequest: { san: string; version: number } | null = null;
   @Input() replayData: GameReplayResponse | null = null;
 
   @Output() readonly moveRowsChanged = new EventEmitter<MoveRow[]>();
@@ -113,6 +114,7 @@ export class ChessboardComponent implements OnChanges {
     moved: boolean;
   } | null = null;
   private suppressNextSquareClick = false;
+  private lastProcessedSanMoveVersion = 0;
 
   constructor() {
     this.pieces = this.parseFenToPieces(this.currentFen);
@@ -125,6 +127,10 @@ export class ChessboardComponent implements OnChanges {
 
     if ('navigationRequest' in changes && this.navigationRequest) {
       this.navigateToPly(this.navigationRequest.ply);
+    }
+
+    if ('sanMoveRequest' in changes && this.sanMoveRequest) {
+      this.consumeSanMoveRequest(this.sanMoveRequest);
     }
   }
 
@@ -624,6 +630,50 @@ export class ChessboardComponent implements OnChanges {
     } finally {
       this.isSubmittingMove = false;
     }
+  }
+
+  private async tryApplySanMove(san: string): Promise<void> {
+    if (this.isSubmittingMove || this.pendingPromotionMove || this.isSetupMode) {
+      return;
+    }
+
+    this.isSubmittingMove = true;
+    this.statusMessage = null;
+
+    try {
+      const response = await firstValueFrom(
+        this.boardApi.applyMove({
+          fen: this.currentFen,
+          san
+        })
+      );
+
+      if (!response.isValid || !response.fen) {
+        this.statusMessage = null;
+        return;
+      }
+
+      this.applySuccessfulMove(response.fen, response.san ?? san);
+    } catch (error) {
+      this.statusMessage = this.resolveBackendErrorMessage(error);
+    } finally {
+      this.isSubmittingMove = false;
+    }
+  }
+
+  private consumeSanMoveRequest(request: { san: string; version: number }): void {
+    if (request.version <= this.lastProcessedSanMoveVersion) {
+      return;
+    }
+
+    const san = request.san.trim();
+    if (!san) {
+      this.lastProcessedSanMoveVersion = request.version;
+      return;
+    }
+
+    this.lastProcessedSanMoveVersion = request.version;
+    void this.tryApplySanMove(san);
   }
 
   private resolveBackendErrorMessage(error: unknown): string {

@@ -143,6 +143,21 @@ export function toExplorerGamesFiltersQuery(state: ExplorerGamesFilterState): Ex
   return query;
 }
 
+export function toExplorerMoveTreeFiltersPayload(state: ExplorerGamesFilterState): Record<string, string | number | boolean> {
+  const baseFilters = toExplorerGamesFiltersQuery(state);
+
+  const payload: Record<string, string | number | boolean> = {
+    ...baseFilters
+  };
+
+  if (baseFilters.fen) {
+    payload['filterFen'] = baseFilters.fen;
+    delete payload['fen'];
+  }
+
+  return payload;
+}
+
 function mapEloMode(mode: ExplorerEloMode): number {
   return mode === 'one' ? 1 : mode === 'both' ? 2 : mode === 'avg' ? 3 : 0;
 }

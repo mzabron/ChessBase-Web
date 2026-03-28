@@ -27,8 +27,14 @@ import { GameReplayResponse } from '../../services/game-replay.models';
 import {
   ExplorerGamesFilterState,
   createDefaultExplorerGamesFilterState,
-  toExplorerGamesFiltersQuery
+  toExplorerGamesFiltersQuery,
+  toExplorerMoveTreeFiltersPayload
 } from '../../services/games-filters.models';
+import {
+  ExplorerBoardApiService,
+  ExplorerMoveTreeRequest,
+  ExplorerMoveTreeResponse
+} from '../../services/explorer-board-api.service';
 
 @Component({
   selector: 'app-explorer-page',
@@ -38,10 +44,12 @@ import {
   styleUrl: './explorer-page.component.scss'
 })
 export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
+  private static readonly initialBoardFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   private readonly authState = inject(AuthStateService);
   private readonly userDatabasesApi = inject(UserDatabasesApiService);
   private readonly draftImportApi = inject(DraftImportApiService);
   private readonly draftImportProgress = inject(DraftImportProgressService);
+  private readonly explorerBoardApi = inject(ExplorerBoardApiService);
 
   private readonly loadedForCurrentSession = signal(false);
   protected readonly activeUserDatabaseId = signal<string | null>(null);
@@ -78,10 +86,14 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
   protected readonly draftGamesSortDirection = signal<DraftGamesSortDirection>('desc');
   protected readonly gamesFilters = signal<ExplorerGamesFilterState>(createDefaultExplorerGamesFilterState());
   protected readonly boardFen = signal('');
+  protected readonly moveTreeData = signal<ExplorerMoveTreeResponse | null>(null);
+  protected readonly moveTreeLoading = signal(false);
+  protected readonly moveTreeError = signal<string | null>(null);
   protected currentDatabaseName = 'Games';
   protected currentGamesSource: 'imported' | 'external' | 'userDatabase' = 'imported';
   protected readonly selectedGameId = signal<string | null>(null);
   protected readonly selectedGameReplay = signal<GameReplayResponse | null>(null);
+  protected readonly boardSanMoveRequest = signal<{ san: string; version: number } | null>(null);
   protected readonly myDatabases = signal<Array<{ id: string; name: string }>>([]);
   protected readonly panelDatabases = signal<Database[]>([]);
   protected readonly currentUserName = this.authState.userName;
@@ -89,6 +101,8 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
   protected currentPly = 0;
   protected navigationRequest: { ply: number; version: number } | null = null;
   private navigationVersion = 0;
+  private moveTreeRequestVersion = 0;
+  private sanMoveRequestVersion = 0;
   private importErrorTimerId: number | null = null;
   private importErrorClearTimerId: number | null = null;
   private pendingDeleteDatabase: Database | null = null;
@@ -228,6 +242,7 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     this.selectedGameReplay.set(null);
     this.moveRows = [];
     this.currentPly = 0;
+    this.clearMoveTree();
   }
 
   protected onDatabaseSelected(database: Database): void {
@@ -365,11 +380,22 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
 
   protected onBoardFenChanged(fen: string): void {
     this.boardFen.set(fen ?? '');
+    void this.loadMoveTree();
   }
 
   protected onPlySelected(ply: number): void {
     this.navigationVersion++;
     this.navigationRequest = { ply, version: this.navigationVersion };
+  }
+
+  protected onTreeMoveSelected(san: string): void {
+    const normalizedSan = san.trim();
+    if (!normalizedSan) {
+      return;
+    }
+
+    this.sanMoveRequestVersion++;
+    this.boardSanMoveRequest.set({ san: normalizedSan, version: this.sanMoveRequestVersion });
   }
 
   protected onDraftGamesSortChanged(payload: { sortBy: DraftGamesSortBy; sortDirection: DraftGamesSortDirection }): void {
@@ -426,7 +452,7 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
       this.focusRightTab = 'games';
     }
 
-    void this.loadCurrentGamesPage();
+    void this.reloadGamesAndMoveTree();
   }
 
   protected onGamesFiltersReset(): void {
@@ -440,7 +466,7 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     this.gamesFilters.set(cleared);
     this.draftGamesPage.set(1);
     this.syncFilterStateFromListControls();
-    void this.loadCurrentGamesPage();
+    void this.reloadGamesAndMoveTree();
   }
 
   protected onGameSelected(game: DraftGameListItem): void {
@@ -511,7 +537,7 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     this.currentDatabaseName = 'Imported Draft';
     this.currentGamesSource = 'imported';
     this.draftGamesPage.set(1);
-    void this.loadCurrentGamesPage();
+    void this.reloadGamesAndMoveTree();
 
     if (!result.importedCount && result.skippedCount > 0) {
       this.showImportError('No games were imported. All parsed games were skipped.');
@@ -588,6 +614,11 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     if (this.currentGamesSource === 'imported') {
       await this.loadDraftGamesPage();
     }
+  }
+
+  private async reloadGamesAndMoveTree(): Promise<void> {
+    await this.loadCurrentGamesPage();
+    await this.loadMoveTree();
   }
 
   private async loadSelectedGameReplay(game: DraftGameListItem): Promise<void> {
@@ -739,7 +770,7 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     this.draftGamesPage.set(1);
     this.syncFilterStateFromListControls();
     this.persistActiveDatabase(database);
-    await this.loadCurrentGamesPage();
+    await this.reloadGamesAndMoveTree();
   }
 
   private async initializeGamesSourceForSession(availableDatabases: Database[]): Promise<void> {
@@ -781,7 +812,7 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     this.currentDatabaseName = 'Imported Draft';
     this.draftGamesPage.set(1);
     this.syncFilterStateFromListControls();
-    await this.loadCurrentGamesPage();
+    await this.reloadGamesAndMoveTree();
 
     if (!this.gamesLoaded) {
       this.currentDatabaseName = 'Games';
@@ -815,6 +846,70 @@ export class ExplorerPageComponent implements OnDestroy, AfterViewInit {
     this.selectedGameReplay.set(null);
     this.moveRows = [];
     this.currentPly = 0;
+    this.clearMoveTree();
+  }
+
+  private async loadMoveTree(): Promise<void> {
+    if (!this.authState.isAuthenticated()) {
+      this.clearMoveTree();
+      return;
+    }
+
+    if (this.currentGamesSource === 'external') {
+      this.clearMoveTree();
+      return;
+    }
+
+    const boardFen = this.boardFen().trim();
+    const fen = boardFen.length > 0 ? boardFen : ExplorerPageComponent.initialBoardFen;
+
+    if (this.currentGamesSource === 'userDatabase') {
+      const userDatabaseId = this.activeUserDatabaseId();
+      if (!userDatabaseId) {
+        this.clearMoveTree();
+        return;
+      }
+    }
+
+    const requestVersion = ++this.moveTreeRequestVersion;
+    this.moveTreeLoading.set(true);
+    this.moveTreeError.set(null);
+
+    const filterPayload = toExplorerMoveTreeFiltersPayload(this.gamesFilters());
+    const request: ExplorerMoveTreeRequest = {
+      fen,
+      source: this.currentGamesSource === 'userDatabase' ? 0 : 1,
+      userDatabaseId: this.currentGamesSource === 'userDatabase' ? this.activeUserDatabaseId() ?? undefined : undefined,
+      maxMoves: 40,
+      ...filterPayload
+    };
+
+    try {
+      const response = await firstValueFrom(this.explorerBoardApi.getMoveTree(request));
+      if (requestVersion !== this.moveTreeRequestVersion) {
+        return;
+      }
+
+      this.moveTreeData.set(response);
+    } catch {
+      if (requestVersion !== this.moveTreeRequestVersion) {
+        return;
+      }
+
+      this.moveTreeData.set(null);
+      this.moveTreeError.set('Unable to load move tree for current filtered games.');
+    } finally {
+      if (requestVersion === this.moveTreeRequestVersion) {
+        this.moveTreeLoading.set(false);
+      }
+    }
+  }
+
+  private clearMoveTree(): void {
+    this.moveTreeRequestVersion++;
+    this.moveTreeLoading.set(false);
+    this.moveTreeError.set(null);
+    this.moveTreeData.set(null);
   }
 
   private async deleteDatabase(database: Database): Promise<void> {

@@ -102,6 +102,38 @@ public class GameExplorerService(
             return new MoveTreeResponse();
         }
 
+        var normalizedWhiteFirstName = NormalizeOptional(request.WhiteFirstName);
+        var normalizedWhiteLastName = NormalizeOptional(request.WhiteLastName);
+        var normalizedBlackFirstName = NormalizeOptional(request.BlackFirstName);
+        var normalizedBlackLastName = NormalizeOptional(request.BlackLastName);
+
+        var normalizedFilterFen = request.SearchByPosition && !string.IsNullOrWhiteSpace(request.FilterFen)
+            ? request.FilterFen.Trim()
+            : null;
+
+        long? filterFenHash = null;
+        if (request.SearchByPosition
+            && (request.PositionMode == PositionSearchMode.Exact || request.PositionMode == PositionSearchMode.SamePosition)
+            && normalizedFilterFen is not null)
+        {
+            try
+            {
+                var filterState = boardStateSerializer.FromFen(normalizedFilterFen);
+                filterFenHash = unchecked((long)positionHasher.Compute(filterState));
+            }
+            catch (FormatException)
+            {
+                return new MoveTreeResponse();
+            }
+        }
+
+        if (request.SearchByPosition
+            && (request.PositionMode == PositionSearchMode.Exact || request.PositionMode == PositionSearchMode.SamePosition)
+            && normalizedFilterFen is null)
+        {
+            return new MoveTreeResponse();
+        }
+
         request.MaxMoves = request.MaxMoves <= 0 ? 20 : Math.Min(request.MaxMoves, 100);
 
         var state = boardStateSerializer.FromFen(normalizedFen);
@@ -110,8 +142,14 @@ public class GameExplorerService(
         var response = await gameExplorerRepository.GetMoveTreeAsync(
             request,
             ownerUserId,
+            normalizedWhiteFirstName,
+            normalizedWhiteLastName,
+            normalizedBlackFirstName,
+            normalizedBlackLastName,
             normalizedFen,
             fenHash,
+            normalizedFilterFen,
+            filterFenHash,
             cancellationToken);
 
         foreach (var move in response.Moves)

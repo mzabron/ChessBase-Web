@@ -4,26 +4,26 @@
     <p>Top played moves for current board position.</p>
   </header>
 
-  <div class="tree-list">
-    <div class="tree-item">
-      <span class="move">1. e4</span>
-      <span class="meta">42%</span>
-      <span class="meta">12,430 games</span>
+  @if (loading) {
+    <p class="tree-status">Loading move tree...</p>
+  } @else if (error) {
+    <p class="tree-status tree-status-error">{{ error }}</p>
+  } @else if (!hasMoves) {
+    <p class="tree-status">{{ emptyMessage }}</p>
+  } @else {
+    <p class="tree-caption">
+      Based on {{ moveTree?.totalGamesInPosition ?? 0 }} games.
+    </p>
+
+    <div class="tree-list">
+      <div class="tree-item" *ngFor="let move of moveTree?.moves; trackBy: trackByMove">
+        <button type="button" class="move" (click)="onMoveClicked(move)">{{ move.moveSan }}</button>
+        <span class="meta">{{ shareOfPosition(move) | number: '1.0-2' }}%</span>
+        <span class="meta">{{ move.games | number }} games</span>
+        <span class="meta split">W {{ move.whiteWinPct | number: '1.0-2' }}%</span>
+        <span class="meta split">D {{ move.drawPct | number: '1.0-2' }}%</span>
+        <span class="meta split">B {{ move.blackWinPct | number: '1.0-2' }}%</span>
+      </div>
     </div>
-    <div class="tree-item">
-      <span class="move">1. d4</span>
-      <span class="meta">37%</span>
-      <span class="meta">10,912 games</span>
-    </div>
-    <div class="tree-item">
-      <span class="move">1. Nf3</span>
-      <span class="meta">9%</span>
-      <span class="meta">2,688 games</span>
-    </div>
-    <div class="tree-item">
-      <span class="move">1. c4</span>
-      <span class="meta">8%</span>
-      <span class="meta">2,134 games</span>
-    </div>
-  </div>
+  }
 </article>
