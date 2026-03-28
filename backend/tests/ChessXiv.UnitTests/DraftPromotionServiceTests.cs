@@ -23,7 +23,7 @@ public class DraftPromotionServiceTests
         var result = await service.PromoteAsync("user-1", userDatabaseId);
 
         Assert.Equal(1, result.PromotedCount);
-        Assert.Single(repo.AddedGames);
+        Assert.Equal(1, repo.PromoteAllCallCount);
     }
 
     [Fact]
@@ -41,9 +41,7 @@ public class DraftPromotionServiceTests
         var result = await service.PromoteAsync("user-1", userDatabaseId);
 
         Assert.Equal(1001, result.PromotedCount);
-        Assert.Equal(3, repo.NonEmptyPageFetchCount);
-        Assert.Equal(4, repo.PageFetchCount);
-        Assert.Equal(0, repo.RemainingStagingGamesCount);
+        Assert.Equal(1, repo.PromoteAllCallCount);
     }
 
     private static StagingGame CreateStagingGame(string ownerUserId, string hash, string @event, string site)
@@ -106,10 +104,7 @@ public class DraftPromotionServiceTests
             _stagingGames = stagingGames.ToList();
         }
 
-        public List<Game> AddedGames { get; } = [];
-        public int PageFetchCount { get; private set; }
-        public int NonEmptyPageFetchCount { get; private set; }
-        public int RemainingStagingGamesCount => _stagingGames.Count;
+        public int PromoteAllCallCount { get; private set; }
 
         public Task<UserDatabase?> GetUserDatabaseAsync(Guid userDatabaseId, CancellationToken cancellationToken = default)
         {
@@ -127,33 +122,22 @@ public class DraftPromotionServiceTests
             });
         }
 
-        public Task<IReadOnlyCollection<StagingGame>> GetStagingGamesPageAsync(string ownerUserId, int take, CancellationToken cancellationToken = default)
+        public Task<int> PromoteAllAsync(
+            string ownerUserId,
+            Guid userDatabaseId,
+            DateTime addedAtUtc,
+            CancellationToken cancellationToken = default)
         {
-            PageFetchCount++;
-            var page = _stagingGames.Take(take).ToArray();
-            if (page.Length > 0)
+            PromoteAllCallCount++;
+
+            if (!string.Equals(ownerUserId, _ownerUserId, StringComparison.Ordinal) || userDatabaseId != _userDatabaseId)
             {
-                NonEmptyPageFetchCount++;
+                return Task.FromResult(0);
             }
 
-            return Task.FromResult<IReadOnlyCollection<StagingGame>>(page);
-        }
-
-        public Task AddGameAsync(Game game, CancellationToken cancellationToken = default)
-        {
-            AddedGames.Add(game);
-            return Task.CompletedTask;
-        }
-
-        public Task AddUserDatabaseGameAsync(UserDatabaseGame userDatabaseGame, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task RemoveStagingGamesAsync(IReadOnlyCollection<Guid> stagingGameIds, CancellationToken cancellationToken = default)
-        {
-            _stagingGames.RemoveAll(g => stagingGameIds.Contains(g.Id));
-            return Task.CompletedTask;
+            var promoted = _stagingGames.Count;
+            _stagingGames.Clear();
+            return Task.FromResult(promoted);
         }
 
     }

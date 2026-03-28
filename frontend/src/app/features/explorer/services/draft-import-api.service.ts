@@ -16,6 +16,11 @@ export interface DraftPromotionRequest {
   userDatabaseId: string;
 }
 
+export interface DirectImportToDatabaseRequest {
+  pgn: string;
+  userDatabaseId: string;
+}
+
 export interface DraftPromotionResult {
   promotedCount: number;
   skippedCount: number;
@@ -57,6 +62,10 @@ export class DraftImportApiService {
 
   promoteDraft(request: DraftPromotionRequest): Observable<DraftPromotionResult> {
     return this.http.post<DraftPromotionResult>(`${this.baseUrl}/drafts/promote`, request);
+  }
+
+  importToDatabase(request: DirectImportToDatabaseRequest): Observable<DraftImportResult> {
+    return this.http.post<DraftImportResult>(`${this.baseUrl}/import-to-database`, request);
   }
 
   getDraftGames(

@@ -50,6 +50,8 @@ export class ExplorerPageComponent implements OnDestroy {
 
   protected gamesLoaded = false;
   protected readonly isImporting = signal(false);
+  protected readonly isSavingDraft = signal(false);
+  protected readonly saveDraftCompleted = signal(false);
   protected readonly importProgress = signal<DraftImportProgressUpdate | null>(null);
   protected readonly importError = signal<string | null>(null);
   protected readonly importErrorVisible = signal(false);
@@ -71,6 +73,7 @@ export class ExplorerPageComponent implements OnDestroy {
   private navigationVersion = 0;
   private importErrorTimerId: number | null = null;
   private importErrorClearTimerId: number | null = null;
+  private draftViewFrozenAfterSave = false;
   protected mockGames: any[] = [
     {
       year: 2023,
@@ -203,7 +206,13 @@ export class ExplorerPageComponent implements OnDestroy {
     newDatabaseName?: string;
     visibility: 'private' | 'public';
   }): Promise<void> {
+    if (this.isSavingDraft()) {
+      return;
+    }
+
     this.clearImportError();
+    this.saveDraftCompleted.set(false);
+    this.isSavingDraft.set(true);
 
     try {
       let userDatabaseId = payload.targetDatabaseId;
@@ -228,12 +237,27 @@ export class ExplorerPageComponent implements OnDestroy {
       this.currentDatabaseName = payload.mode === 'create'
         ? (payload.newDatabaseName ?? 'Imported Games')
         : (this.myDatabases().find(db => db.id === userDatabaseId)?.name ?? 'Saved Database');
+      this.draftViewFrozenAfterSave = true;
 
-      await this.loadDraftGamesPage();
       await this.reloadUserDatabases();
-    } catch {
+      this.saveDraftCompleted.set(true);
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && payload.mode === 'create') {
+        const rawMessage = this.extractErrorMessage(error);
+        if (error.status === 409 || rawMessage.toLowerCase().includes('already exists')) {
+          this.showImportError('You already have a database with this name.');
+          return;
+        }
+      }
+
       this.showImportError('Saving imported games failed. Please try again.');
+    } finally {
+      this.isSavingDraft.set(false);
     }
+  }
+
+  protected closeSaveDraftModal(): void {
+    this.saveDraftCompleted.set(false);
   }
 
   protected addCurrentDatabaseBookmark(): void {
@@ -254,6 +278,10 @@ export class ExplorerPageComponent implements OnDestroy {
   }
 
   protected onDraftGamesSortChanged(payload: { sortBy: DraftGamesSortBy; sortDirection: DraftGamesSortDirection }): void {
+    if (this.draftViewFrozenAfterSave) {
+      return;
+    }
+
     this.draftGamesSortBy.set(payload.sortBy);
     this.draftGamesSortDirection.set(payload.sortDirection);
 
@@ -266,18 +294,30 @@ export class ExplorerPageComponent implements OnDestroy {
   }
 
   protected onDraftGamesResultSortModeChanged(resultSortMode: DraftGamesResultSortMode): void {
+    if (this.draftViewFrozenAfterSave) {
+      return;
+    }
+
     this.draftGamesResultSortMode.set(resultSortMode);
     this.draftGamesPage.set(1);
     void this.loadDraftGamesPage();
   }
 
   protected onDraftGamesPageSizeChanged(pageSize: number): void {
+    if (this.draftViewFrozenAfterSave) {
+      return;
+    }
+
     this.draftGamesPageSize.set(pageSize);
     this.draftGamesPage.set(1);
     void this.loadDraftGamesPage();
   }
 
   protected onDraftGamesPageChanged(page: number): void {
+    if (this.draftViewFrozenAfterSave) {
+      return;
+    }
+
     this.draftGamesPage.set(page);
     void this.loadDraftGamesPage();
   }
@@ -342,6 +382,7 @@ export class ExplorerPageComponent implements OnDestroy {
   }
 
   private applyImportedDraftState(result: DraftImportResult): void {
+    this.draftViewFrozenAfterSave = false;
     this.gamesLoaded = result.importedCount > 0;
     this.currentDatabaseName = 'Imported Draft';
     this.currentGamesSource = 'imported';
@@ -400,6 +441,21 @@ export class ExplorerPageComponent implements OnDestroy {
     }
 
     return 'Import failed. Please try again.';
+  }
+
+  private extractErrorMessage(error: HttpErrorResponse): string {
+    if (typeof error.error === 'string') {
+      return error.error;
+    }
+
+    if (error.error && typeof error.error === 'object' && 'message' in error.error) {
+      const message = (error.error as { message?: unknown }).message;
+      if (typeof message === 'string') {
+        return message;
+      }
+    }
+
+    return '';
   }
 
   private loadUserDatabases(): void {

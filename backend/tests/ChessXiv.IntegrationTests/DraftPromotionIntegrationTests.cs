@@ -142,7 +142,7 @@ public class DraftPromotionIntegrationTests(PostgresTestFixture fixture)
         await dbContext.SaveChangesAsync();
 
         var baseRepository = new DraftPromotionRepository(dbContext);
-        var failingRepository = new ThrowingDraftPromotionRepository(baseRepository, failOnAddGameCall: 999);
+        var failingRepository = new ThrowingDraftPromotionRepository(baseRepository);
         var unitOfWork = new EfUnitOfWork(dbContext);
         var promotionService = new DraftPromotionService(failingRepository, unitOfWork);
 
@@ -211,7 +211,7 @@ public class DraftPromotionIntegrationTests(PostgresTestFixture fixture)
         var result = await promotionService.PromoteAsync(ownerId, userDatabaseId);
 
         Assert.Equal(1001, result.PromotedCount);
-        Assert.Equal(3, countingUnitOfWork.ClearTrackerCalls);
+        Assert.Equal(1, countingUnitOfWork.ClearTrackerCalls);
         Assert.Empty(dbContext.ChangeTracker.Entries());
         Assert.Equal(1001, await dbContext.Games.CountAsync());
         Assert.Equal(1001, await dbContext.UserDatabaseGames.CountAsync());
@@ -265,8 +265,25 @@ public class DraftPromotionIntegrationTests(PostgresTestFixture fixture)
 
     private static string BuildPgnGames(int count)
     {
+        var openings = new (string White, string Black)[]
+        {
+            ("e4", "e5"),
+            ("d4", "d5"),
+            ("c4", "e5"),
+            ("Nf3", "d5"),
+            ("g3", "d5"),
+            ("b3", "d5"),
+            ("f4", "d5"),
+            ("Nc3", "d5"),
+            ("e3", "d5"),
+            ("a3", "d5")
+        };
+
         var blocks = Enumerable.Range(1, count)
             .Select(i =>
+            {
+                var opening = openings[(i - 1) % openings.Length];
+                return
                 $"[Event \"Draft Game {i}\"]\n" +
                 "[Site \"Test\"]\n" +
                 "[Date \"2026.03.18\"]\n" +
@@ -274,7 +291,8 @@ public class DraftPromotionIntegrationTests(PostgresTestFixture fixture)
                 "[White \"Alpha\"]\n" +
                 "[Black \"Beta\"]\n" +
                 "[Result \"*\"]\n\n" +
-                "1. e4 e5 *");
+                $"1. {opening.White} {opening.Black} *";
+            });
 
         return string.Join("\n\n\n", blocks);
     }
@@ -301,39 +319,20 @@ public class DraftPromotionIntegrationTests(PostgresTestFixture fixture)
         }
     }
 
-    private sealed class ThrowingDraftPromotionRepository(IDraftPromotionRepository inner, int failOnAddGameCall) : IDraftPromotionRepository
+    private sealed class ThrowingDraftPromotionRepository(IDraftPromotionRepository inner) : IDraftPromotionRepository
     {
-        private int _addGameCalls;
-
         public Task<UserDatabase?> GetUserDatabaseAsync(Guid userDatabaseId, CancellationToken cancellationToken = default)
         {
             return inner.GetUserDatabaseAsync(userDatabaseId, cancellationToken);
         }
 
-        public Task<IReadOnlyCollection<StagingGame>> GetStagingGamesPageAsync(string ownerUserId, int take, CancellationToken cancellationToken = default)
+        public Task<int> PromoteAllAsync(
+            string ownerUserId,
+            Guid userDatabaseId,
+            DateTime addedAtUtc,
+            CancellationToken cancellationToken = default)
         {
-            return inner.GetStagingGamesPageAsync(ownerUserId, take, cancellationToken);
-        }
-
-        public Task AddGameAsync(Game game, CancellationToken cancellationToken = default)
-        {
-            _addGameCalls++;
-            if (_addGameCalls == failOnAddGameCall)
-            {
-                throw new InvalidOperationException("Simulated failure during promotion.");
-            }
-
-            return inner.AddGameAsync(game, cancellationToken);
-        }
-
-        public Task AddUserDatabaseGameAsync(UserDatabaseGame userDatabaseGame, CancellationToken cancellationToken = default)
-        {
-            return inner.AddUserDatabaseGameAsync(userDatabaseGame, cancellationToken);
-        }
-
-        public Task RemoveStagingGamesAsync(IReadOnlyCollection<Guid> stagingGameIds, CancellationToken cancellationToken = default)
-        {
-            return inner.RemoveStagingGamesAsync(stagingGameIds, cancellationToken);
+            throw new InvalidOperationException("Simulated failure during promotion.");
         }
 
     }

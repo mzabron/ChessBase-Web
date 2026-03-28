@@ -13,6 +13,7 @@ namespace ChessXiv.Api.Controllers;
 public class PgnImportController(
     IPgnImportService pgnImportService,
     IDraftImportService draftImportService,
+    IDirectDatabaseImportService directDatabaseImportService,
     IDraftPromotionService draftPromotionService,
     ChessXivDbContext dbContext,
     ChessXiv.Api.Services.DraftImportProgressCache progressCache) : ControllerBase
@@ -27,6 +28,38 @@ public class PgnImportController(
 
         using var reader = new StringReader(request.Pgn);
         var result = await pgnImportService.ImportAsync(reader, cancellationToken: cancellationToken);
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpPost("import-to-database")]
+    [RequestSizeLimit(200_000_000)]
+    public async Task<IActionResult> ImportToDatabase([FromBody] DirectImportToDatabaseRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Pgn))
+        {
+            return BadRequest("PGN content is required.");
+        }
+
+        if (request.UserDatabaseId == Guid.Empty)
+        {
+            return BadRequest("User database id is required.");
+        }
+
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        using var reader = new StringReader(request.Pgn);
+        var result = await directDatabaseImportService.ImportToDatabaseAsync(
+            reader,
+            userId,
+            request.UserDatabaseId,
+            batchSize: 500,
+            cancellationToken: cancellationToken);
+
         return Ok(result);
     }
 
