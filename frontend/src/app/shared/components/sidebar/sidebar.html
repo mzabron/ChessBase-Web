@@ -27,8 +27,6 @@
           } @else if (accountSummary(); as summary) {
             <div class="menu-profile">
               <p class="menu-nickname">{{ summary.nickname || userName }}</p>
-              <p class="menu-quota">Saved games: {{ formatQuota(summary.savedGamesUsed, summary.savedGamesLimit) }}</p>
-              <p class="menu-quota">Imported games: {{ formatQuota(summary.importedGamesUsed, summary.importedGamesLimit) }}</p>
             </div>
           }
 

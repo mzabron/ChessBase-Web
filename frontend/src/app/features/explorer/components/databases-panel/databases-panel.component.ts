@@ -28,17 +28,12 @@ export class DatabasesPanelComponent {
 
   searchQuery = signal('');
   sortByCreationDesc = signal(true);
-  myDatabasesOnly = signal(false);
 
   private readonly databasesSignal = signal<Database[]>([]);
 
   filteredAndSortedDatabases = computed(() => {
     let result = this.databasesSignal();
     const query = this.searchQuery().toLowerCase().trim();
-
-    if (this.myDatabasesOnly()) {
-      result = result.filter(db => db.owner === this.currentUser);
-    }
 
     if (query) {
       result = result.filter(db =>
@@ -58,34 +53,5 @@ export class DatabasesPanelComponent {
 
   toggleSort() {
     this.sortByCreationDesc.update(val => !val);
-  }
-
-  toggleMyDatabases(): void {
-    this.myDatabasesOnly.update(value => !value);
-  }
-
-  createNewDatabase(): void {
-    const name = window.prompt('Database name');
-    if (!name || !name.trim()) {
-      return;
-    }
-
-    const newDatabase: Database = {
-      id: this.generateId(),
-      name: name.trim(),
-      owner: this.currentUser || 'current-user',
-      creationDate: new Date(),
-      gamesCount: 0
-    };
-
-    this.databasesSignal.update(existing => [newDatabase, ...existing]);
-  }
-
-  private generateId(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-
-    return `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
   }
 }
