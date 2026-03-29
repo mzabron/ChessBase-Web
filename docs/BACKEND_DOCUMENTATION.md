@@ -2,7 +2,7 @@
 
 This document describes the backend as implemented in the current codebase under backend/.
 
-Companion schema image: docs/database-schema.png
+Companion schema image: docs/assets/database-schema.png
 
 ## 1. Scope
 
