@@ -239,7 +239,15 @@ export class ChessboardComponent implements OnChanges {
     }
 
     const sourceSquare = this.coordsToSquare(piece.x, piece.y);
-    if (!this.canSelectSquare(sourceSquare) || this.isSubmittingMove) {
+    
+    if (!this.canSelectSquare(sourceSquare)) {
+      if (this.selectedSquare && !this.isSubmittingMove) {
+        this.handleSquareInteraction(sourceSquare);
+      }
+      return;
+    }
+
+    if (this.isSubmittingMove) {
       return;
     }
 
