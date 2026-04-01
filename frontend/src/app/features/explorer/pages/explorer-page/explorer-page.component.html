@@ -24,11 +24,13 @@
         (moveRowsChanged)="onMoveRowsChanged($event)"
         (currentPlyChanged)="onCurrentPlyChanged($event)"
         (currentFenChanged)="onBoardFenChanged($event)" />
-      <app-move-list
-        [moveRows]="moveRows"
-        [currentPly]="currentPly"
-        [gameResult]="selectedGameReplay()?.result ?? null"
-        (plySelected)="onPlySelected($event)" />
+      <div class="move-list-container">
+        <app-move-list
+          [moveRows]="moveRows"
+          [currentPly]="currentPly"
+          [gameResult]="selectedGameReplay()?.result ?? null"
+          (plySelected)="onPlySelected($event)" />
+      </div>
     </div>
 
     <!-- Focus Mode Board -->

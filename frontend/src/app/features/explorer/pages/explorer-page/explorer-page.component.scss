@@ -70,9 +70,15 @@
   min-width: 320px;
 }
 
-.board-moves-row app-move-list {
+.board-moves-row .move-list-container {
+  position: relative;
   min-width: 145px;
   height: 100%;
+}
+
+.board-moves-row app-move-list {
+  position: absolute;
+  inset: 0;
 }
 
 .resize-handle {
